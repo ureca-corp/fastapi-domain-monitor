@@ -7,243 +7,220 @@ from fastapi_domain_monitor.models import (
     ParsedClass,
     ParsedEnum,
     ParsedField,
+    ParsedMethod,
     ParsedModule,
     ParsedRelationship,
+    SourceSpan,
 )
+
+
+def _span(start: int = 1, end: int = 10) -> SourceSpan:
+    return SourceSpan(file_path=Path("/tmp/models.py"), start_line=start, end_line=end)
 
 
 def _module(domain: str = "test", classes=None, enums=None) -> ParsedModule:
     return ParsedModule(
         domain_name=domain,
-        file_path=Path(f"{domain}/_models.py"),
+        file_path=Path(f"/tmp/{domain}/models.py"),
         classes=classes or [],
         enums=enums or [],
     )
 
 
-def _entity(name: str, fields=None, relationships=None, base_classes=None, is_join=False) -> ParsedClass:
-    if is_join:
-        bases = base_classes or ["SQLModel"]
-    else:
-        bases = base_classes or ["BaseModel", "SQLModel"]
+def _class(
+    name: str,
+    *,
+    symbol_id: str,
+    base_classes=None,
+    base_symbol_ids=None,
+    fields=None,
+    relationships=None,
+    methods=None,
+    stereotypes=None,
+    is_table: bool = False,
+    is_protocol_like: bool = False,
+    is_abstract: bool = False,
+    docstring: str | None = None,
+    model_config=None,
+    tablename: str | None = None,
+) -> ParsedClass:
     return ParsedClass(
         name=name,
-        base_classes=bases,
-        is_table=True,
+        symbol_id=symbol_id,
+        source_span=_span(),
+        base_classes=base_classes or [],
+        base_symbol_ids=base_symbol_ids or [],
         fields=fields or [],
         relationships=relationships or [],
+        methods=methods or [],
+        stereotypes=stereotypes or [],
+        is_table=is_table,
+        is_protocol_like=is_protocol_like,
+        is_abstract=is_abstract,
+        docstring=docstring,
+        model_config=model_config or {},
+        tablename=tablename,
+    )
+
+
+def _enum(name: str, symbol_id: str) -> ParsedEnum:
+    return ParsedEnum(
+        name=name,
+        symbol_id=symbol_id,
+        source_span=_span(),
+        base_class="StrEnum",
+        members=["ACTIVE", "INACTIVE"],
     )
 
 
 def test_empty_schema():
-    schema = DomainSchema(modules=[])
-    result = generate_mermaid(schema)
-    assert result == "classDiagram\n"
+    assert generate_mermaid(DomainSchema()) == "classDiagram\n"
 
 
-def test_single_class_entity():
-    cls = _entity("Account", fields=[
-        ParsedField(name="login_id", type_annotation="str"),
-    ])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
+def test_compact_render_includes_methods_and_stereotypes():
+    account = _class(
+        "Account",
+        symbol_id="account1",
+        fields=[
+            ParsedField(name="id", type_annotation="UUID", is_primary_key=True),
+            ParsedField(name="email", type_annotation="str"),
+            ParsedField(name="_secret", type_annotation="str", visibility="private", is_private=True),
+            ParsedField(name="kind", type_annotation="ClassVar[str]", visibility="public", is_classvar=True),
+            ParsedField(name="total", type_annotation="int", is_computed=True),
+        ],
+        methods=[
+            ParsedMethod(name="login", return_type="bool"),
+            ParsedMethod(name="_normalize", visibility="private"),
+        ],
+        stereotypes=["Entity"],
+        is_table=True,
+    )
+    result = generate_mermaid(DomainSchema(modules=[_module("accounts", classes=[account])]))
 
-    assert "namespace students {" in result
+    assert 'class node_account1["Account"] {' in result
     assert "<<Entity>>" in result
-    assert "class Account {" in result
-    assert "+str login_id" in result
+    assert "+str email" in result
+    assert "+login() bool" in result
+    assert "_secret" not in result
+    assert "ClassVar" not in result
+    assert "total" not in result
+    assert "_normalize" not in result
 
 
-def test_join_table_stereotype():
-    cls = _entity("StudentClass", is_join=True, fields=[
-        ParsedField(name="student_id", type_annotation="UUID"),
-        ParsedField(name="class_id", type_annotation="UUID"),
-    ])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
-
-    assert "<<JoinTable>>" in result
-    assert "<<Entity>>" not in result
-
-
-def test_enum_rendered_outside_namespace():
-    enum = ParsedEnum(name="ActiveStatus", base_class="StrEnum", members=["ACTIVE", "INACTIVE"])
-    cls = _entity("Account")
-    schema = DomainSchema(modules=[_module("students", classes=[cls], enums=[enum])])
-    result = generate_mermaid(schema)
-
-    lines = result.split("\n")
-    # Enum은 namespace 닫힌 이후에 등장
-    namespace_close_idx = next(i for i, l in enumerate(lines) if l.strip() == "}")
-    enum_idx = next(i for i, l in enumerate(lines) if "<<Enumeration>>" in l)
-    assert enum_idx > namespace_close_idx
-    assert "ACTIVE" in result
-    assert "INACTIVE" in result
-
-
-def test_one_to_one_relationship():
-    rel = ParsedRelationship(
-        field_name="teacher",
-        target_class="Teacher",
-        uselist_false=True,
-        is_list=False,
+def test_full_render_shows_notes_private_and_metadata():
+    invoice = _class(
+        "Invoice",
+        symbol_id="invoice1",
+        fields=[
+            ParsedField(name="amount", type_annotation="int", alias="total_amount", constraints={"gt": "0"}),
+            ParsedField(name="_secret", type_annotation="str", visibility="private", is_private=True, default_repr="'x'"),
+            ParsedField(name="kind", type_annotation="ClassVar[str]", is_classvar=True),
+            ParsedField(name="total", type_annotation="int", is_computed=True),
+        ],
+        methods=[
+            ParsedMethod(name="validate_amount", decorator_labels=["field_validator(amount)"], is_validator=True),
+            ParsedMethod(name="_serialize", visibility="private"),
+        ],
+        stereotypes=["DTO", "Abstract"],
+        is_abstract=True,
+        docstring="Invoice summary.\n\nMore detail.",
+        model_config={"extra": "forbid", "frozen": "True"},
+        tablename="ignored_here",
     )
-    cls = _entity("Account", relationships=[rel])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
-
-    assert '"0..1"' in result
-    assert '"1"' in result
-    assert ": teacher" in result
-
-
-def test_one_to_many_relationship():
-    rel = ParsedRelationship(
-        field_name="students",
-        target_class="Student",
-        is_list=True,
+    result = generate_mermaid(
+        DomainSchema(modules=[_module("billing", classes=[invoice])]),
+        detail_level="full",
     )
-    cls = _entity("Class", relationships=[rel])
-    schema = DomainSchema(modules=[_module("classes", classes=[cls])])
-    result = generate_mermaid(schema)
 
-    assert '"1"' in result
-    assert '"*"' in result
-    assert ": students" in result
+    assert "-str _secret" in result
+    assert "+ClassVar[str] kind$" in result
+    assert "+int total" in result
+    assert "-_serialize()" in result
+    assert 'note for node_invoice1 "Invoice summary.' in result
+    assert "field_validator(amount)" in result
+    assert "alias=total_amount" in result
+    assert "config: extra=forbid, frozen=True" in result
 
 
-def test_many_to_many_relationship():
-    rel = ParsedRelationship(
-        field_name="classes",
-        target_class="Class",
-        is_list=True,
-        link_model="StudentClass",
+def test_inheritance_realization_and_framework_base_filter():
+    protocol = _class("Repository", symbol_id="repo1", is_protocol_like=True, stereotypes=["ValueObject"])
+    base = _class("BaseEntity", symbol_id="base1", stereotypes=["Abstract"], is_abstract=True)
+    framework = _class("BaseModel", symbol_id="framework1")
+    user_repo = _class(
+        "UserRepository",
+        symbol_id="userrepo1",
+        base_classes=["Repository"],
+        base_symbol_ids=["repo1"],
     )
-    cls = _entity("Student", relationships=[rel])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
-
-    # 양쪽 모두 "*"
-    line = [l for l in result.split("\n") if "classes" in l and "-->" in l][0]
-    assert '"*"' in line
-    assert line.count('"*"') == 2
-
-
-def test_duplicate_relationship_deduplicated():
-    rel_a = ParsedRelationship(field_name="teacher", target_class="Teacher", uselist_false=True)
-    rel_b = ParsedRelationship(field_name="account", target_class="Account", uselist_false=True)
-    cls_a = _entity("Account", relationships=[rel_a])
-    cls_b = _entity("Teacher", relationships=[rel_b])
-    schema = DomainSchema(modules=[_module("users", classes=[cls_a, cls_b])])
-    result = generate_mermaid(schema)
-
-    rel_lines = [l for l in result.split("\n") if "-->" in l]
-    assert len(rel_lines) == 1
-
-
-def test_base_fields_hidden_by_default():
-    cls = _entity("Account", fields=[
-        ParsedField(name="id", type_annotation="UUID", is_primary_key=True),
-        ParsedField(name="created_at", type_annotation="datetime"),
-        ParsedField(name="login_id", type_annotation="str"),
-    ])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
-
-    assert "+str login_id" in result
-    assert "id" not in result.split("class Account {")[1].split("}")[0] or "+UUID id" not in result
-    # 더 직접적 체크
-    class_block = result.split("class Account {")[1].split("}")[0]
-    assert "+UUID id" not in class_block
-    assert "created_at" not in class_block
-
-
-def test_base_fields_shown():
-    cls = _entity("Account", fields=[
-        ParsedField(name="id", type_annotation="UUID", is_primary_key=True),
-        ParsedField(name="login_id", type_annotation="str"),
-    ])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema, show_base_fields=True)
-
-    assert "+UUID id" in result
-    assert "+str login_id" in result
-
-
-def test_nullable_field_has_question_mark():
-    cls = _entity("Account", fields=[
-        ParsedField(name="contact", type_annotation="str | None", is_nullable=True),
-    ])
-    schema = DomainSchema(modules=[_module("students", classes=[cls])])
-    result = generate_mermaid(schema)
-
-    assert "+str? contact" in result
-
-
-def test_fk_inferred_relationship():
-    """FK만 있고 Relationship() 없는 경우 → 관계선 자동 생성."""
-    from fastapi_domain_monitor.models import ParsedClass
-
-    student = _entity("Student", fields=[
-        ParsedField(name="account_id", type_annotation="UUID", foreign_key="accounts.id"),
-    ])
-    account = ParsedClass(
-        name="Account",
-        base_classes=["BaseModel", "SQLModel"],
-        is_table=True,
-        tablename="accounts",
-        fields=[ParsedField(name="login_id", type_annotation="str")],
-        relationships=[],
+    account = _class(
+        "Account",
+        symbol_id="account2",
+        base_classes=["BaseEntity", "BaseModel"],
+        base_symbol_ids=["base1", "framework1"],
     )
-    schema = DomainSchema(modules=[
-        _module("students", classes=[student]),
-        _module("accounts", classes=[account]),
-    ])
-    result = generate_mermaid(schema)
+    result = generate_mermaid(DomainSchema(modules=[_module("core", classes=[protocol, base, framework, user_repo, account])]))
 
-    rel_lines = [l for l in result.split("\n") if "-->" in l]
-    assert len(rel_lines) == 1
-    assert "Student" in rel_lines[0]
-    assert "Account" in rel_lines[0]
-    assert "account_id" in rel_lines[0]
+    assert "node_userrepo1 ..|> node_repo1" in result
+    assert "node_base1 <|-- node_account2" in result
+    assert "node_framework1 <|-- node_account2" not in result
 
 
-def test_enum_relationship():
-    """필드 타입이 Enum이면 점선 연결선(..>) 생성."""
-    enum = ParsedEnum(name="ActiveStatus", base_class="StrEnum", members=["ACTIVE", "INACTIVE"])
-    cls = _entity("Account", fields=[
-        ParsedField(name="status", type_annotation="ActiveStatus"),
-    ])
-    schema = DomainSchema(modules=[_module("accounts", classes=[cls], enums=[enum])])
-    result = generate_mermaid(schema)
-
-    assert "..>" in result
-    assert "ActiveStatus" in result
-    assert ": status" in result
-
-
-def test_fk_no_duplicate_with_explicit():
-    """Relationship()과 FK가 동시에 있으면 관계선 1개만 생성."""
-    from fastapi_domain_monitor.models import ParsedClass
-
-    rel = ParsedRelationship(field_name="account", target_class="Account", is_list=False)
-    student = _entity("Student",
-        fields=[ParsedField(name="account_id", type_annotation="UUID", foreign_key="accounts.id")],
-        relationships=[rel],
+def test_relationships_and_composition_render():
+    status = _enum("Status", "enum1")
+    address = _class("Address", symbol_id="address1", stereotypes=["ValueObject"])
+    user = _class(
+        "User",
+        symbol_id="user1",
+        fields=[
+            ParsedField(name="status", type_annotation="Status", target_symbol_id="enum1"),
+            ParsedField(name="address", type_annotation="Address", target_symbol_id="address1"),
+            ParsedField(name="emails", type_annotation="list[Email]", collection_kind="list", target_symbol_id="email1"),
+        ],
+        relationships=[
+            ParsedRelationship(field_name="profile", target_class="Profile", target_symbol_id="profile1", back_populates="user"),
+            ParsedRelationship(field_name="orders", target_class="Order", target_symbol_id="order1", is_list=True, cascade_delete=True),
+        ],
     )
-    account = ParsedClass(
-        name="Account",
-        base_classes=["BaseModel", "SQLModel"],
-        is_table=True,
-        tablename="accounts",
-        fields=[],
-        relationships=[],
+    profile = _class(
+        "Profile",
+        symbol_id="profile1",
+        relationships=[ParsedRelationship(field_name="user", target_class="User", target_symbol_id="user1", back_populates="profile")],
     )
-    schema = DomainSchema(modules=[
-        _module("students", classes=[student]),
-        _module("accounts", classes=[account]),
-    ])
+    order = _class("Order", symbol_id="order1")
+    email = _class("Email", symbol_id="email1")
+
+    schema = DomainSchema(modules=[_module("accounts", classes=[user, profile, order, address, email], enums=[status])])
     result = generate_mermaid(schema)
 
-    rel_lines = [l for l in result.split("\n") if "-->" in l]
-    assert len(rel_lines) == 1
+    assert "node_user1 ..> node_enum1 : status" in result
+    assert 'node_user1 "1" *-- "1" node_address1 : address' in result
+    assert 'node_user1 "1" *-- "*" node_email1 : emails' in result
+    assert 'node_user1 "1" --> "1" node_profile1 : profile' in result
+    assert 'node_user1 "1" *-- "*" node_order1 : orders' in result
+
+
+def test_fk_inference_and_domain_filter():
+    user = _class("User", symbol_id="user2", tablename="users")
+    report = _class(
+        "Report",
+        symbol_id="report1",
+        fields=[ParsedField(name="reviewer_id", type_annotation="UUID", foreign_key="users.id")],
+    )
+    schema = DomainSchema(modules=[_module("accounts", classes=[user]), _module("reports", classes=[report])])
+
+    all_result = generate_mermaid(schema)
+    filtered_result = generate_mermaid(schema, visible_domains={"reports"})
+
+    assert 'node_report1 "1" --> "1" node_user2 : reviewer_id' in all_result
+    assert 'node_report1 "1" --> "1" node_user2 : reviewer_id' not in filtered_result
+
+
+def test_duplicate_names_render_with_distinct_aliases():
+    admin_user = _class("User", symbol_id="user_admin")
+    account_user = _class("User", symbol_id="user_account")
+    result = generate_mermaid(
+        DomainSchema(modules=[_module("admin", classes=[admin_user]), _module("accounts", classes=[account_user])])
+    )
+
+    assert 'class node_user_admin["User"] {' in result
+    assert 'class node_user_account["User"] {' in result

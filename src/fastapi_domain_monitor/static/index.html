@@ -6,176 +6,303 @@
 <title>FastAPI Domain Monitor</title>
 <style>
   :root {
-    --bg: #f8f9fa;
-    --text: #1a1a2e;
-    --header-bg: #ffffff;
-    --sidebar-bg: #f0f1f3;
-    --diagram-bg: #ffffff;
-    --border: #dee2e6;
-    --accent: #4361ee;
-    --accent-hover: #3a56d4;
-    --shadow: rgba(0,0,0,0.08);
-    --input-bg: #ffffff;
-    --badge-bg: #e9ecef;
+    --bg: #f3f0ea;
+    --panel: rgba(255, 251, 245, 0.9);
+    --panel-strong: #fffaf4;
+    --text: #1b1a17;
+    --muted: #6b675f;
+    --border: rgba(62, 54, 42, 0.12);
+    --accent: #aa5d1f;
+    --accent-soft: rgba(170, 93, 31, 0.12);
+    --shadow: 0 18px 42px rgba(43, 31, 16, 0.12);
+    --selected: rgba(170, 93, 31, 0.16);
+    --code-bg: #f6ede0;
+    --success: #0f8b6c;
+    --warning: #c5760a;
+    --danger: #c2473b;
   }
+
   [data-theme="dark"] {
-    --bg: #1a1a2e;
-    --text: #e8e8f0;
-    --header-bg: #16213e;
-    --sidebar-bg: #0f3460;
-    --diagram-bg: #16213e;
-    --border: #2a2a4a;
-    --accent: #4cc9f0;
-    --accent-hover: #3db8dd;
-    --shadow: rgba(0,0,0,0.3);
-    --input-bg: #1a1a3e;
-    --badge-bg: #2a2a4a;
+    --bg: #111316;
+    --panel: rgba(22, 25, 29, 0.94);
+    --panel-strong: #171b20;
+    --text: #f5f3ee;
+    --muted: #9ea4ae;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #f0a15d;
+    --accent-soft: rgba(240, 161, 93, 0.14);
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    --selected: rgba(240, 161, 93, 0.16);
+    --code-bg: #0e1217;
+    --success: #49d3ab;
+    --warning: #f0b34f;
+    --danger: #ff7b72;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);
+    font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    background:
+      radial-gradient(circle at top left, rgba(170, 93, 31, 0.08), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(80, 52, 26, 0.08), transparent 26%),
+      var(--bg);
     color: var(--text);
-    height: 100vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: background 0.3s, color 0.3s;
   }
+
   header {
-    height: 56px;
-    background: var(--header-bg);
+    padding: 18px 24px;
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 2px 8px var(--shadow);
+    backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
-    padding: 0 20px;
-    gap: 16px;
-    flex-shrink: 0;
-    z-index: 10;
+    gap: 18px;
+    flex-wrap: wrap;
   }
-  header h1 { font-size: 18px; font-weight: 700; white-space: nowrap; }
-  header h1 span { color: var(--accent); }
-  .search-box {
-    position: relative;
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .brand small {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .header-controls {
     margin-left: auto;
-    width: 260px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
-  .search-box input {
-    width: 100%;
-    padding: 7px 32px 7px 12px;
+
+  .search-box, .pill-group, .theme-toggle {
+    background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--input-bg);
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.2s;
+    box-shadow: var(--shadow);
+    border-radius: 999px;
   }
-  .search-box input:focus { border-color: var(--accent); }
-  .search-box .clear-btn {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .search-box input {
+    width: 220px;
+    border: 0;
+    outline: none;
+    background: transparent;
     color: var(--text);
+    font-size: 13px;
+    padding: 10px 0;
+  }
+
+  .search-box button,
+  .theme-toggle,
+  .pill-group button,
+  .sidebar button {
     cursor: pointer;
-    font-size: 14px;
-    opacity: 0.5;
+  }
+
+  .search-box button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
     display: none;
   }
-  .search-box .clear-btn:hover { opacity: 1; }
-  .theme-toggle {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--text);
-    transition: background 0.2s;
+
+  .pill-group {
+    display: inline-flex;
+    padding: 4px;
   }
-  .theme-toggle:hover { background: var(--badge-bg); }
-  .layout { display: flex; flex: 1; overflow: hidden; }
-  aside {
-    width: 220px;
-    background: var(--sidebar-bg);
-    border-right: 1px solid var(--border);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    overflow-y: auto;
-    flex-shrink: 0;
-    transition: background 0.3s;
-  }
-  .section-title {
-    font-size: 11px;
+
+  .pill-group button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
     font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--accent);
-    margin-bottom: 4px;
   }
-  .domain-list { display: flex; flex-direction: column; gap: 4px; }
-  .domain-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0;
-    font-size: 13px;
-    cursor: pointer;
-    user-select: none;
-  }
-  .domain-item input[type="checkbox"] { accent-color: var(--accent); }
-  .domain-item:hover { opacity: 0.8; }
-  .status-section { margin-top: auto; }
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    margin-bottom: 12px;
-  }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .status-dot.connected { background: #22c55e; }
-  .status-dot.disconnected { background: #ef4444; }
-  .status-dot.reconnecting { background: #f59e0b; }
-  .refresh-btn {
-    width: 100%;
-    padding: 8px;
+
+  .pill-group button.active {
     background: var(--accent);
     color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s;
   }
-  .refresh-btn:hover { background: var(--accent-hover); }
-  .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  main {
+
+  .theme-toggle {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 15px;
+  }
+
+  .app-shell {
     flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) 360px;
+    gap: 16px;
     padding: 16px;
-    overflow: hidden;
-    display: flex;
-    align-items: stretch;
-    justify-content: stretch;
   }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    border-radius: 24px;
+    backdrop-filter: blur(18px);
+    min-height: 0;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+    gap: 18px;
+    overflow: auto;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .domain-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .domain-item,
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-strong);
+    border-radius: 16px;
+    font-size: 13px;
+  }
+
+  .domain-item input,
+  .toggle-row input {
+    accent-color: var(--accent);
+  }
+
+  .status-card {
+    border: 1px solid var(--border);
+    background: var(--panel-strong);
+    border-radius: 18px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+
+  .status-dot.connected { background: var(--success); }
+  .status-dot.reconnecting { background: var(--warning); }
+  .status-dot.disconnected { background: var(--danger); }
+
+  .sidebar button.refresh-btn {
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 14px;
+    padding: 10px 12px;
+    font-weight: 700;
+  }
+
+  .sidebar button.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .diagram-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .diagram-toolbar {
+    padding: 16px 18px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .diagram-toolbar strong {
+    font-size: 16px;
+  }
+
+  .diagram-toolbar span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
   #diagram-wrapper {
     flex: 1;
-    background: var(--diagram-bg);
-    border-radius: 10px;
-    box-shadow: 0 2px 12px var(--shadow);
+    margin: 16px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+    position: relative;
     overflow: hidden;
     cursor: grab;
-    position: relative;
-    transition: background 0.3s;
   }
+
   #diagram-wrapper:active { cursor: grabbing; }
+
   #diagram-container {
     width: 100%;
     height: 100%;
@@ -184,127 +311,253 @@
     justify-content: center;
     transform-origin: 0 0;
   }
-  #diagram-container svg { max-width: none !important; max-height: none !important; }
-  .error-message {
+
+  #diagram-container svg {
+    max-width: none !important;
+    max-height: none !important;
+  }
+
+  .diagram-hint {
+    position: absolute;
+    right: 16px;
+    bottom: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 10px;
+  }
+
+  .source-panel {
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+
+  .source-header {
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .source-header strong {
+    font-size: 16px;
+  }
+
+  .source-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    word-break: break-all;
+  }
+
+  .source-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 18px;
+  }
+
+  .empty-state,
+  .error-message {
+    height: 100%;
+    display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    color: #ef4444;
-    font-size: 14px;
     text-align: center;
+    color: var(--muted);
     padding: 24px;
+    line-height: 1.5;
   }
-  .error-message pre {
-    background: var(--badge-bg);
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    max-width: 600px;
+
+  .error-message {
+    color: var(--danger);
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  pre.code-block {
+    margin: 0;
+    padding: 16px;
+    border-radius: 18px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
     overflow: auto;
-    white-space: pre-wrap;
     color: var(--text);
-    text-align: left;
+    font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+    font-size: 12px;
+    line-height: 1.55;
   }
-  .no-domains { font-size: 13px; opacity: 0.6; padding: 4px 0; }
-  .highlight-match { fill: #fbbf24 !important; font-weight: bold; }
-  [data-theme="dark"] .highlight-match { fill: #f59e0b !important; }
+
+  .highlight-match {
+    fill: var(--accent) !important;
+    font-weight: 700;
+  }
+
+  #diagram-container .selected-node rect,
+  #diagram-container .selected-node polygon,
+  #diagram-container .selected-node path {
+    stroke: var(--accent) !important;
+    stroke-width: 2px !important;
+    fill: var(--selected) !important;
+  }
+
+  @media (max-width: 1200px) {
+    .app-shell {
+      grid-template-columns: 240px minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) 280px;
+    }
+
+    .source-panel {
+      grid-column: 1 / span 2;
+      grid-row: 2;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .search-box input {
+      width: 160px;
+    }
+  }
 </style>
 </head>
 <body>
   <header>
-    <h1><span>FastAPI</span> Domain Monitor</h1>
-    <div class="search-box">
-      <input type="text" id="search-input" placeholder="Search models...">
-      <button class="clear-btn" id="search-clear">&times;</button>
+    <div class="brand">
+      <h1>FastAPI Domain Monitor</h1>
+      <small>Pydantic and SQLModel live class diagrams</small>
     </div>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle theme"></button>
+    <div class="header-controls">
+      <div class="search-box">
+        <input id="search-input" type="text" placeholder="Search classes, fields, methods">
+        <button id="search-clear" type="button">&times;</button>
+      </div>
+      <div class="pill-group" id="detail-toggle">
+        <button type="button" data-level="compact" class="active">Compact</button>
+        <button type="button" data-level="full">Full</button>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle theme"></button>
+    </div>
   </header>
-  <div class="layout">
-    <aside>
-      <div>
+
+  <div class="app-shell">
+    <aside class="panel sidebar">
+      <div class="section">
         <div class="section-title">Domains</div>
         <div class="domain-list" id="domain-list">
-          <div class="no-domains">Loading...</div>
+          <div class="domain-item">Loading...</div>
         </div>
       </div>
-      <div class="status-section">
+
+      <div class="section">
+        <div class="section-title">View</div>
+        <label class="toggle-row">
+          <span>Show base fields</span>
+          <input id="base-fields-toggle" type="checkbox">
+        </label>
+      </div>
+
+      <div class="section">
         <div class="section-title">Status</div>
-        <div class="status-indicator">
-          <div class="status-dot disconnected" id="status-dot"></div>
-          <span id="status-text">Disconnected</span>
+        <div class="status-card">
+          <div class="status-line">
+            <span class="status-dot disconnected" id="status-dot"></span>
+            <span id="status-text">Disconnected</span>
+          </div>
+          <button class="refresh-btn" id="refresh-btn" type="button">Refresh Diagram</button>
         </div>
-        <button class="refresh-btn" id="refresh-btn">Refresh</button>
       </div>
     </aside>
-    <main>
-      <div id="diagram-wrapper">
-        <div id="diagram-container">
-          <div class="no-domains">Connecting...</div>
+
+    <main class="panel diagram-panel">
+      <div class="diagram-toolbar">
+        <div>
+          <strong>Class Diagram</strong>
+          <div><span id="diagram-summary">Waiting for schema…</span></div>
         </div>
       </div>
+      <div id="diagram-wrapper">
+        <div id="diagram-container">
+          <div class="empty-state">Connecting…</div>
+        </div>
+        <div class="diagram-hint">drag to pan · wheel to zoom · click a class for source</div>
+      </div>
     </main>
+
+    <section class="panel source-panel">
+      <div class="source-header">
+        <strong id="source-title">Source</strong>
+        <div class="source-meta" id="source-meta">
+          <span>Select a class or enum node.</span>
+        </div>
+      </div>
+      <div class="source-body" id="source-body">
+        <div class="empty-state">Rendered nodes expose file path, line range, and the exact code excerpt here.</div>
+      </div>
+    </section>
   </div>
 
 <script type="module">
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
-// --- Helpers ---
-function clearChildren(el) {
-  while (el.firstChild) el.removeChild(el.firstChild);
-}
-
-function showMessage(container, text) {
-  clearChildren(container);
-  const div = document.createElement('div');
-  div.className = 'no-domains';
-  div.textContent = text;
-  container.appendChild(div);
-}
-
-function showError(container, title, detail) {
-  clearChildren(container);
-  const wrap = document.createElement('div');
-  wrap.className = 'error-message';
-  const titleEl = document.createElement('div');
-  titleEl.textContent = title;
-  wrap.appendChild(titleEl);
-  if (detail) {
-    const pre = document.createElement('pre');
-    pre.textContent = detail;
-    wrap.appendChild(pre);
-  }
-  container.appendChild(wrap);
-}
-
-// --- State ---
-let currentMermaidSource = '';
-let domains = [];
-let hiddenDomains = new Set();
-let domainClassMap = {};  // domain_name → [class_name, ...]
-let ws = null;
-let retryDelay = 1000;
-const MAX_RETRY_DELAY = 30000;
-let renderCounter = 0;
-
-// --- Theme ---
+const diagramContainer = document.getElementById('diagram-container');
+const diagramSummary = document.getElementById('diagram-summary');
+const domainListEl = document.getElementById('domain-list');
+const searchInput = document.getElementById('search-input');
+const searchClear = document.getElementById('search-clear');
+const sourceTitle = document.getElementById('source-title');
+const sourceMeta = document.getElementById('source-meta');
+const sourceBody = document.getElementById('source-body');
+const refreshBtn = document.getElementById('refresh-btn');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const baseFieldsToggle = document.getElementById('base-fields-toggle');
 const themeToggle = document.getElementById('theme-toggle');
+const detailToggle = document.getElementById('detail-toggle');
+const wrapper = document.getElementById('diagram-wrapper');
+
+const state = {
+  schema: null,
+  currentMermaidSource: '',
+  selectedDomains: new Set(),
+  selectedSymbolId: null,
+  ws: null,
+  retryDelay: 1000,
+  renderCounter: 0,
+  initializedDefaults: false,
+  detailLevel: 'compact',
+  showBaseFields: false,
+  aliasToSymbolId: new Map(),
+  scale: 1,
+  panX: 0,
+  panY: 0,
+};
+
+const MAX_RETRY_DELAY = 30000;
 const savedTheme = localStorage.getItem('theme') || 'light';
 applyTheme(savedTheme);
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  themeToggle.textContent = theme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+  themeToggle.textContent = theme === 'dark' ? '☀️' : '☾';
   localStorage.setItem('theme', theme);
-  initMermaid(theme);
-}
-
-function initMermaid(theme) {
   mermaid.initialize({
     startOnLoad: false,
-    theme: theme === 'dark' ? 'dark' : 'default',
-    securityLevel: 'loose'
+    theme: theme === 'dark' ? 'dark' : 'base',
+    securityLevel: 'loose',
+    class: {
+      hideEmptyMembersBox: false,
+    },
   });
 }
 
@@ -312,130 +565,134 @@ themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   applyTheme(next);
-  if (currentMermaidSource) renderMermaid(currentMermaidSource);
+  if (state.currentMermaidSource) {
+    renderMermaid(state.currentMermaidSource);
+  }
 });
 
-// --- Mermaid Rendering ---
-const diagramContainer = document.getElementById('diagram-container');
-
-async function renderMermaid(code) {
-  currentMermaidSource = code;
-  const filtered = filterMermaidSource(code);
-  try {
-    renderCounter++;
-    const id = 'diagram-' + renderCounter;
-    const { svg } = await mermaid.render(id, filtered);
-    // mermaid.render produces sanitized SVG — safe to parse and inject via DOM
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(svg, 'image/svg+xml');
-    const svgEl = doc.documentElement;
-    if (svgEl.nodeName === 'svg') {
-      clearChildren(diagramContainer);
-      diagramContainer.appendChild(document.adoptNode(svgEl));
-    } else {
-      // Fallback: DOMParser returned parsererror, display as text
-      showError(diagramContainer, 'SVG parse error', svg);
-    }
-    resetTransform();
-    applySearchHighlight();
-  } catch (err) {
-    showError(diagramContainer, 'Mermaid rendering error', (err.message || String(err)) + '\n\n' + filtered);
-  }
+function setStatus(kind) {
+  statusDot.className = `status-dot ${kind}`;
+  const labels = {
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    reconnecting: 'Reconnecting…',
+  };
+  statusText.textContent = labels[kind] || kind;
 }
 
-function filterMermaidSource(code) {
-  if (hiddenDomains.size === 0) return code;
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
 
-  // Step 1: namespace 블록 제거
-  const lines = code.split('\n');
-  const result = [];
-  let skipDepth = 0;
-  let skipping = false;
-  for (const line of lines) {
-    const nsMatch = line.match(/^\s*namespace\s+(\S+)/);
-    if (nsMatch && hiddenDomains.has(nsMatch[1])) {
-      skipping = true;
-      skipDepth = 1;  // namespace 자체의 { 포함
-      continue;
-    }
-    if (skipping) {
-      if (line.includes('{')) skipDepth++;
-      if (line.includes('}')) {
-        skipDepth--;
-        if (skipDepth <= 0) { skipping = false; }
-      }
-      continue;
-    }
-    result.push(line);
+function showMessage(container, text) {
+  clearChildren(container);
+  const div = document.createElement('div');
+  div.className = 'empty-state';
+  div.textContent = text;
+  container.appendChild(div);
+}
+
+function showError(container, title, detail = '') {
+  clearChildren(container);
+  const wrap = document.createElement('div');
+  wrap.className = 'error-message';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  wrap.appendChild(strong);
+  if (detail) {
+    const pre = document.createElement('pre');
+    pre.className = 'code-block';
+    pre.textContent = detail;
+    wrap.appendChild(pre);
   }
+  container.appendChild(wrap);
+}
 
-  // Step 2: 숨겨진 도메인의 클래스가 포함된 관계선 제거
-  const hiddenClasses = new Set();
-  hiddenDomains.forEach(domain => {
-    (domainClassMap[domain] || []).forEach(cls => hiddenClasses.add(cls));
+function diagramId(symbolId) {
+  return `node_${symbolId}`;
+}
+
+function updateDetailButtons() {
+  detailToggle.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.level === state.detailLevel);
   });
-
-  if (hiddenClasses.size === 0) return result.join('\n');
-
-  return result.filter(line => {
-    if (!line.includes('-->') && !line.includes('..>')) return true;
-    for (const cls of hiddenClasses) {
-      if (new RegExp(`\\b${cls}\\b`).test(line)) return false;
-    }
-    return true;
-  }).join('\n');
 }
-
-// --- Pan / Zoom ---
-let scale = 1, panX = 0, panY = 0;
-let isPanning = false, startX = 0, startY = 0;
-const wrapper = document.getElementById('diagram-wrapper');
 
 function applyTransform() {
-  diagramContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  diagramContainer.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
 }
 
 function resetTransform() {
-  scale = 1; panX = 0; panY = 0;
+  state.scale = 1;
+  state.panX = 0;
+  state.panY = 0;
   diagramContainer.style.transform = 'none';
 }
 
-wrapper.addEventListener('mousedown', (e) => {
-  if (e.button !== 0) return;
+let isPanning = false;
+let startX = 0;
+let startY = 0;
+
+wrapper.addEventListener('mousedown', (event) => {
+  if (event.button !== 0) return;
   isPanning = true;
-  startX = e.clientX - panX;
-  startY = e.clientY - panY;
-  e.preventDefault();
+  startX = event.clientX - state.panX;
+  startY = event.clientY - state.panY;
+  event.preventDefault();
 });
 
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('mousemove', (event) => {
   if (!isPanning) return;
-  panX = e.clientX - startX;
-  panY = e.clientY - startY;
+  state.panX = event.clientX - startX;
+  state.panY = event.clientY - startY;
   applyTransform();
 });
 
-window.addEventListener('mouseup', () => { isPanning = false; });
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+});
 
-wrapper.addEventListener('wheel', (e) => {
-  e.preventDefault();
+wrapper.addEventListener('wheel', (event) => {
+  event.preventDefault();
   const rect = wrapper.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  const delta = e.deltaY > 0 ? 0.9 : 1.1;
-  const newScale = Math.min(5.0, Math.max(0.1, scale * delta));
-  const ratio = newScale / scale;
-  panX = mouseX - ratio * (mouseX - panX);
-  panY = mouseY - ratio * (mouseY - panY);
-  scale = newScale;
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+  const delta = event.deltaY > 0 ? 0.9 : 1.1;
+  const nextScale = Math.min(5, Math.max(0.12, state.scale * delta));
+  const ratio = nextScale / state.scale;
+  state.panX = mouseX - ratio * (mouseX - state.panX);
+  state.panY = mouseY - ratio * (mouseY - state.panY);
+  state.scale = nextScale;
   applyTransform();
 }, { passive: false });
 
-wrapper.addEventListener('dblclick', () => { resetTransform(); });
+wrapper.addEventListener('dblclick', resetTransform);
 
-// --- Search ---
-const searchInput = document.getElementById('search-input');
-const searchClear = document.getElementById('search-clear');
+function selectedDomainArray() {
+  return Array.from(state.selectedDomains);
+}
+
+function applySearchHighlight() {
+  const query = searchInput.value.trim().toLowerCase();
+  diagramContainer.querySelectorAll('text, tspan').forEach((node) => {
+    node.classList.remove('highlight-match');
+    if (query && node.textContent.toLowerCase().includes(query)) {
+      node.classList.add('highlight-match');
+    }
+  });
+}
+
+function applySelectedHighlight() {
+  diagramContainer.querySelectorAll('.selected-node').forEach((node) => {
+    node.classList.remove('selected-node');
+  });
+  if (!state.selectedSymbolId) return;
+  const id = diagramId(state.selectedSymbolId);
+  const target = diagramContainer.querySelector(`[id="${id}"]`);
+  if (target) {
+    target.classList.add('selected-node');
+  }
+}
 
 searchInput.addEventListener('input', () => {
   searchClear.style.display = searchInput.value ? 'block' : 'none';
@@ -448,130 +705,241 @@ searchClear.addEventListener('click', () => {
   applySearchHighlight();
 });
 
-function applySearchHighlight() {
-  const query = searchInput.value.trim().toLowerCase();
-  const texts = diagramContainer.querySelectorAll('text, tspan');
-  texts.forEach(el => {
-    el.classList.remove('highlight-match');
-    if (query && el.textContent.toLowerCase().includes(query)) {
-      el.classList.add('highlight-match');
-    }
-  });
-}
+detailToggle.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-level]');
+  if (!button || button.dataset.level === state.detailLevel) return;
+  state.detailLevel = button.dataset.level;
+  updateDetailButtons();
+  await renderCurrentView();
+});
 
-// --- Domain Filter ---
-const domainListEl = document.getElementById('domain-list');
+baseFieldsToggle.addEventListener('change', async () => {
+  state.showBaseFields = baseFieldsToggle.checked;
+  await renderCurrentView();
+});
 
-async function loadDomains() {
-  try {
-    const res = await fetch('api/schema');
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    // DomainSchema: { modules: [{domain_name, classes: [{name,...}], ...}, ...] }
-    domains = (data.modules || []).map(m => m.domain_name).filter(Boolean);
-    domainClassMap = {};
-    (data.modules || []).forEach(m => {
-      if (m.domain_name) {
-        domainClassMap[m.domain_name] = (m.classes || []).map(c => c.name);
-      }
-    });
-    renderDomainList();
-  } catch {
-    showMessage(domainListEl, 'Failed to load domains');
+function updateDiagramSummary() {
+  if (!state.schema) {
+    diagramSummary.textContent = 'Waiting for schema…';
+    return;
   }
+  const totalClasses = (state.schema.modules || []).reduce((count, module) => count + (module.classes || []).length, 0);
+  const totalEnums = (state.schema.modules || []).reduce((count, module) => count + (module.enums || []).length, 0);
+  diagramSummary.textContent = `${selectedDomainArray().length} domains · ${totalClasses} classes · ${totalEnums} enums`;
 }
 
 function renderDomainList() {
   clearChildren(domainListEl);
-  if (domains.length === 0) {
+  if (!state.schema || !(state.schema.modules || []).length) {
     showMessage(domainListEl, 'No domains found');
     return;
   }
-  domains.forEach(domain => {
+  (state.schema.modules || []).forEach((module) => {
     const label = document.createElement('label');
     label.className = 'domain-item';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !hiddenDomains.has(domain);
-    cb.addEventListener('change', () => {
-      if (cb.checked) hiddenDomains.delete(domain);
-      else hiddenDomains.add(domain);
-      if (currentMermaidSource) renderMermaid(currentMermaidSource);
+    const text = document.createElement('span');
+    text.textContent = module.domain_name;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = state.selectedDomains.has(module.domain_name);
+    checkbox.addEventListener('change', async () => {
+      if (checkbox.checked) {
+        state.selectedDomains.add(module.domain_name);
+      } else {
+        state.selectedDomains.delete(module.domain_name);
+      }
+      updateDiagramSummary();
+      await renderCurrentView();
     });
-    const span = document.createElement('span');
-    span.textContent = domain;
-    label.appendChild(cb);
-    label.appendChild(span);
+    label.append(text, checkbox);
     domainListEl.appendChild(label);
   });
 }
 
-// --- WebSocket ---
-const statusDot = document.getElementById('status-dot');
-const statusText = document.getElementById('status-text');
+function ingestSchema(payload) {
+  if (!payload) return;
+  state.schema = payload;
+  if (!state.initializedDefaults && payload.defaults) {
+    state.detailLevel = payload.defaults.detail_level || 'compact';
+    state.showBaseFields = Boolean(payload.defaults.show_base_fields);
+    state.initializedDefaults = true;
+    updateDetailButtons();
+    baseFieldsToggle.checked = state.showBaseFields;
+  }
 
-function updateStatus(state) {
-  statusDot.className = 'status-dot ' + state;
-  const labels = { connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting...' };
-  statusText.textContent = labels[state] || state;
+  const domains = (payload.modules || []).map((module) => module.domain_name);
+  if (state.selectedDomains.size === 0) {
+    domains.forEach((domain) => state.selectedDomains.add(domain));
+  } else {
+    state.selectedDomains = new Set(selectedDomainArray().filter((domain) => domains.includes(domain)));
+    if (state.selectedDomains.size === 0) {
+      domains.forEach((domain) => state.selectedDomains.add(domain));
+    }
+  }
+
+  state.aliasToSymbolId = new Map();
+  (payload.modules || []).forEach((module) => {
+    (module.classes || []).forEach((item) => {
+      state.aliasToSymbolId.set(diagramId(item.symbol_id), item.symbol_id);
+    });
+    (module.enums || []).forEach((item) => {
+      state.aliasToSymbolId.set(diagramId(item.symbol_id), item.symbol_id);
+    });
+  });
+  updateDetailButtons();
+  baseFieldsToggle.checked = state.showBaseFields;
+  renderDomainList();
+  updateDiagramSummary();
+}
+
+async function syncSchema() {
+  const response = await fetch('api/schema');
+  if (!response.ok) throw new Error('Failed to load schema');
+  const payload = await response.json();
+  ingestSchema(payload);
+}
+
+async function fetchMermaid() {
+  const params = new URLSearchParams();
+  params.set('detail_level', state.detailLevel);
+  params.set('show_base_fields', String(state.showBaseFields));
+  const selected = selectedDomainArray();
+  if (selected.length > 0) {
+    params.set('domains', selected.join(','));
+  } else {
+    return 'classDiagram\n';
+  }
+  const response = await fetch(`api/mermaid?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to load Mermaid diagram');
+  return await response.text();
+}
+
+window.handleSymbolClick = (mermaidId) => {
+  const symbolId = state.aliasToSymbolId.get(mermaidId) || state.selectedSymbolId;
+  if (symbolId) {
+    openSource(symbolId);
+  }
+};
+
+async function renderMermaid(source) {
+  state.currentMermaidSource = source;
+  if (source.trim() === 'classDiagram') {
+    showMessage(diagramContainer, 'No visible domains');
+    return;
+  }
+  try {
+    state.renderCounter += 1;
+    const renderId = `diagram-${state.renderCounter}`;
+    const { svg, bindFunctions } = await mermaid.render(renderId, source);
+    const parser = new DOMParser();
+    const documentNode = parser.parseFromString(svg, 'image/svg+xml');
+    const svgEl = documentNode.documentElement;
+    if (svgEl.nodeName !== 'svg') {
+      showError(diagramContainer, 'Mermaid rendering error', source);
+      return;
+    }
+    clearChildren(diagramContainer);
+    diagramContainer.appendChild(document.adoptNode(svgEl));
+    if (bindFunctions) {
+      bindFunctions(diagramContainer);
+    }
+    resetTransform();
+    applySearchHighlight();
+    applySelectedHighlight();
+  } catch (error) {
+    showError(diagramContainer, 'Mermaid rendering error', (error.message || String(error)) + '\n\n' + source);
+  }
+}
+
+async function renderCurrentView() {
+  try {
+    const code = await fetchMermaid();
+    await renderMermaid(code);
+  } catch (error) {
+    showError(diagramContainer, 'Failed to render diagram', error.message || String(error));
+  }
+}
+
+async function openSource(symbolId) {
+  state.selectedSymbolId = symbolId;
+  applySelectedHighlight();
+  try {
+    const response = await fetch(`api/source/${symbolId}`);
+    if (!response.ok) throw new Error('Source lookup failed');
+    const payload = await response.json();
+    sourceTitle.textContent = payload.name;
+    clearChildren(sourceMeta);
+    const pathLine = document.createElement('span');
+    pathLine.textContent = payload.file_path;
+    const lineLine = document.createElement('span');
+    lineLine.textContent = `Lines ${payload.start_line}-${payload.end_line} · ${payload.kind}`;
+    sourceMeta.append(pathLine, lineLine);
+    clearChildren(sourceBody);
+    const pre = document.createElement('pre');
+    pre.className = 'code-block';
+    pre.textContent = payload.excerpt || '';
+    sourceBody.appendChild(pre);
+  } catch (error) {
+    showError(sourceBody, 'Failed to load source', error.message || String(error));
+  }
 }
 
 function connect() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}/domain-monitor/ws`);
+  const basePath = location.pathname.replace(/\/$/, '');
+  state.ws = new WebSocket(`${protocol}//${location.host}${basePath}/ws`);
 
-  ws.onopen = () => {
-    retryDelay = 1000;
-    updateStatus('connected');
+  state.ws.onopen = () => {
+    state.retryDelay = 1000;
+    setStatus('connected');
   };
 
-  ws.onmessage = (e) => {
+  state.ws.onmessage = async (event) => {
     try {
-      const data = JSON.parse(e.data);
-      if (data.type === 'update' && data.mermaid) {
-        renderMermaid(data.mermaid);
+      const payload = JSON.parse(event.data);
+      if (payload.schema) {
+        ingestSchema(payload.schema);
       }
-    } catch { /* ignore parse errors */ }
+      if (payload.type === 'update') {
+        await renderCurrentView();
+      } else if (payload.type === 'error') {
+        showError(diagramContainer, 'Parse Error', payload.message || 'Unknown error');
+      }
+    } catch {
+      /* ignore malformed messages */
+    }
   };
 
-  ws.onclose = () => {
-    updateStatus('reconnecting');
-    setTimeout(() => { connect(); }, retryDelay);
-    retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+  state.ws.onclose = () => {
+    setStatus('reconnecting');
+    setTimeout(connect, state.retryDelay);
+    state.retryDelay = Math.min(state.retryDelay * 2, MAX_RETRY_DELAY);
   };
 
-  ws.onerror = () => { ws.close(); };
+  state.ws.onerror = () => {
+    state.ws.close();
+  };
 }
-
-// --- Refresh ---
-const refreshBtn = document.getElementById('refresh-btn');
 
 refreshBtn.addEventListener('click', async () => {
   refreshBtn.disabled = true;
   try {
-    const res = await fetch('api/mermaid');
-    if (!res.ok) throw new Error('Failed to fetch');
-    const code = await res.text();
-    if (code.trim()) await renderMermaid(code);
-  } catch (err) {
-    showError(diagramContainer, 'Failed to refresh diagram', err.message);
+    await syncSchema();
+    await renderCurrentView();
+  } catch (error) {
+    showError(diagramContainer, 'Refresh failed', error.message || String(error));
   } finally {
     refreshBtn.disabled = false;
   }
 });
 
-// --- Init ---
 async function init() {
   try {
-    const res = await fetch('api/mermaid');
-    if (res.ok) {
-      const code = await res.text();
-      if (code.trim()) await renderMermaid(code);
-    }
-  } catch {
-    showError(diagramContainer, 'Failed to load initial diagram');
+    await syncSchema();
+    await renderCurrentView();
+  } catch (error) {
+    showError(diagramContainer, 'Failed to load initial diagram', error.message || String(error));
   }
-  await loadDomains();
   connect();
 }
 
