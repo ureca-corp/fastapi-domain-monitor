@@ -15,6 +15,7 @@ def generate_mermaid(
     show_base_fields: bool = False,
     detail_level: str = "compact",
     visible_domains: set[str] | None = None,
+    visible_stereotypes: set[str] | None = None,
 ) -> str:
     """DomainSchema를 Mermaid classDiagram 텍스트로 변환."""
 
@@ -34,8 +35,18 @@ def generate_mermaid(
         symbol.symbol_id: _diagram_id(symbol.symbol_id)
         for symbol in schema.all_symbols()
     }
-    visible_class_ids = {parsed_class.symbol_id for module in filtered_modules for parsed_class in module.classes}
-    visible_enum_ids = {parsed_enum.symbol_id for module in filtered_modules for parsed_enum in module.enums}
+    visible_class_ids = {
+        parsed_class.symbol_id
+        for module in filtered_modules
+        for parsed_class in module.classes
+        if _matches_stereotypes(parsed_class.stereotypes, visible_stereotypes)
+    }
+    visible_enum_ids = {
+        parsed_enum.symbol_id
+        for module in filtered_modules
+        for parsed_enum in module.enums
+        if visible_stereotypes is None or "Enumeration" in visible_stereotypes
+    }
     tablename_lookup = {
         parsed_class.tablename: parsed_class.symbol_id
         for parsed_class in schema.all_classes()
@@ -45,17 +56,19 @@ def generate_mermaid(
     lines = ["classDiagram", "direction LR"]
 
     for module in filtered_modules:
-        if not module.classes and not module.enums:
+        visible_module_classes = [c for c in module.classes if c.symbol_id in visible_class_ids]
+        visible_module_enums = [e for e in module.enums if e.symbol_id in visible_enum_ids]
+        if not visible_module_classes and not visible_module_enums:
             continue
         lines.append(f"namespace {module.domain_name} {{")
-        for parsed_class in module.classes:
+        for parsed_class in visible_module_classes:
             _render_class(
                 parsed_class,
                 lines,
                 alias_by_symbol_id[parsed_class.symbol_id],
                 show_base_fields=show_base_fields,
             )
-        for parsed_enum in module.enums:
+        for parsed_enum in visible_module_enums:
             _render_enum(parsed_enum, lines, alias_by_symbol_id[parsed_enum.symbol_id])
         lines.append("}")
 
@@ -239,6 +252,15 @@ def _render_relationship(source_alias: str, target_alias: str, relationship: Par
     else:
         left, right = '"1"', '"1"'
     return f"{source_alias} {left} {arrow} {right} {target_alias} : {relationship.field_name}"
+
+
+def _matches_stereotypes(stereotypes: list[str], visible: set[str] | None) -> bool:
+    """visible이 None이면 모두 표시. 클래스에 stereotype이 없으면 'Other'로 취급."""
+    if visible is None:
+        return True
+    if not stereotypes:
+        return "Other" in visible
+    return bool(set(stereotypes) & visible)
 
 
 def _render_composition(source_alias: str, target_alias: str, field: ParsedField) -> str:

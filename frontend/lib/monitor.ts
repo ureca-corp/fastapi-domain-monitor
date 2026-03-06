@@ -12,10 +12,14 @@ export type MonitorModuleEntry = {
   name: string
 }
 
+export type MonitorClassEntry = MonitorModuleEntry & {
+  stereotypes?: string[]
+}
+
 export type MonitorModule = {
   domain_name: string
   file_path?: string
-  classes?: MonitorModuleEntry[]
+  classes?: MonitorClassEntry[]
   enums?: MonitorModuleEntry[]
 }
 
@@ -213,6 +217,23 @@ export function buildDomainSections(schema: MonitorSchema | null): MonitorDomain
       files: [...section.files].sort((left, right) => left.label.localeCompare(right.label)),
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
+}
+
+export function buildAvailableStereotypes(schema: MonitorSchema | null): string[] {
+  const types = new Set<string>()
+  for (const module of schema?.modules ?? []) {
+    for (const cls of module.classes ?? []) {
+      if (cls.stereotypes?.length) {
+        for (const s of cls.stereotypes) types.add(s)
+      } else {
+        types.add("Other")
+      }
+    }
+    if ((module.enums?.length ?? 0) > 0) {
+      types.add("Enumeration")
+    }
+  }
+  return [...types].sort()
 }
 
 export function buildAliasMap(schema: MonitorSchema | null) {

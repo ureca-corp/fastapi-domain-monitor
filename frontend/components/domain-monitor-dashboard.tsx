@@ -39,6 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   buildAliasMap,
+  buildAvailableStereotypes,
   buildDomainSections,
   buildMonitorUrl,
   buildMonitorWebSocketUrl,
@@ -163,12 +164,14 @@ export function DomainMonitorDashboard() {
   const [sourceError, setSourceError] = useState<string | null>(null)
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false)
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
+  const [selectedStereotypes, setSelectedStereotypes] = useState<string[]>([])
 
   useEffect(() => {
     setMonitorBaseUrl(getMonitorBaseUrl())
   }, [])
 
   const domainSections = useMemo(() => buildDomainSections(schema), [schema])
+  const availableStereotypes = useMemo(() => buildAvailableStereotypes(schema), [schema])
   const aliasMap = useMemo(() => buildAliasMap(schema), [schema])
   const filePathToDomainMap = useMemo(() => {
     const nextMap = new Map<string, string>()
@@ -223,6 +226,13 @@ export function DomainMonitorDashboard() {
         const filtered = currentDomains.filter((domain) => nextDomains.includes(domain))
         return filtered.length > 0 ? filtered : nextDomains
       })
+
+      const nextStereotypes = buildAvailableStereotypes(nextSchema)
+      setSelectedStereotypes((current) => {
+        if (current.length === 0) return nextStereotypes
+        const filtered = current.filter((s) => nextStereotypes.includes(s))
+        return filtered.length > 0 ? filtered : nextStereotypes
+      })
     })
   }, [])
 
@@ -243,7 +253,7 @@ export function DomainMonitorDashboard() {
       return
     }
 
-    if (selectedDomains.length === 0) {
+    if (selectedDomains.length === 0 || selectedStereotypes.length === 0) {
       setMermaidSource("classDiagram")
       return
     }
@@ -252,6 +262,7 @@ export function DomainMonitorDashboard() {
       detail_level: "compact",
       domains: selectedDomains.join(","),
       show_base_fields: String(showBaseFields),
+      stereotypes: selectedStereotypes.join(","),
     })
 
     const response = await fetch(buildMonitorUrl(monitorBaseUrl, `api/mermaid?${params.toString()}`), {
@@ -262,7 +273,7 @@ export function DomainMonitorDashboard() {
     }
 
     setMermaidSource(await response.text())
-  }, [monitorBaseUrl, schema, selectedDomains, showBaseFields])
+  }, [monitorBaseUrl, schema, selectedDomains, showBaseFields, selectedStereotypes])
 
   const openFile = useCallback(async (filePath: string) => {
     if (!monitorBaseUrl) {
@@ -532,6 +543,17 @@ export function DomainMonitorDashboard() {
       return current.filter((item) => item !== domainName)
     })
   }, [])
+
+  const setStereotypeVisibility = useCallback((stereotype: string, nextVisible: boolean) => {
+    setSelectedStereotypes((current) => {
+      if (nextVisible) {
+        return [...new Set([...current, stereotype])].sort((left, right) =>
+          left.localeCompare(right)
+        )
+      }
+      return current.filter((item) => item !== stereotype)
+    })
+  }, [])
   const selectedSymbolMeta = sourceData && sourceData.file_path === activeFilePath ? sourceData : null
 
   const renderExplorerNodes = useCallback((nodes: DomainExplorerNode[], depth = 0): React.ReactNode => {
@@ -651,6 +673,39 @@ export function DomainMonitorDashboard() {
             )}
           </div>
         </div>
+
+        {availableStereotypes.length > 0 && (
+          <>
+            <Separator className="my-4 bg-sidebar-border/70" />
+            <div>
+              <p className="text-[11px] font-medium tracking-[0.22em] uppercase text-muted-foreground">
+                Component types
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Toggle which component types appear in the diagram.
+              </p>
+              <div className="mt-3 space-y-1.5">
+                {availableStereotypes.map((stereotype) => {
+                  const checked = selectedStereotypes.includes(stereotype)
+                  return (
+                    <div
+                      className="flex items-center gap-3 rounded-xl px-2 py-2"
+                      key={stereotype}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(nextChecked) => {
+                          setStereotypeVisibility(stereotype, Boolean(nextChecked))
+                        }}
+                      />
+                      <span className="text-sm font-medium">{stereotype}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
         <Separator className="my-4 bg-sidebar-border/70" />
 
@@ -904,7 +959,7 @@ export function DomainMonitorDashboard() {
 
   return (
     <SidebarProvider>
-      <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
+      <div className="relative h-dvh w-full overflow-hidden bg-background text-foreground">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(0,0,0,0.08),transparent_28%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_22%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.05),transparent_18%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.025)_1px,transparent_1px)] bg-[size:36px_36px] opacity-60 dark:bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)]" />
 

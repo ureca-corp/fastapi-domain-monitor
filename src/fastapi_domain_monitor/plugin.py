@@ -88,6 +88,7 @@ class MonitorState:
         domains: list[str] | None = None,
         detail_level: str | None = None,
         show_base_fields: bool | None = None,
+        stereotypes: list[str] | None = None,
     ) -> str:
         if self.schema is None:
             return ""
@@ -96,6 +97,7 @@ class MonitorState:
             show_base_fields=self.show_base_fields if show_base_fields is None else show_base_fields,
             detail_level=self.detail_level if detail_level is None else detail_level,
             visible_domains=set(domains) if domains else None,
+            visible_stereotypes=set(stereotypes) if stereotypes is not None else None,
         )
 
     def source_payload(self, symbol_id: str) -> dict[str, Any] | None:
@@ -267,6 +269,7 @@ def setup_domain_monitor(
         domains: str | None = Query(default=None),
         detail_level: str | None = Query(default=None),
         show_base_fields: bool | None = Query(default=None),
+        stereotypes: str | None = Query(default=None),
     ):
         effective_detail = detail_level or state.detail_level
         if effective_detail not in DETAIL_LEVELS:
@@ -275,6 +278,7 @@ def setup_domain_monitor(
             domains=_parse_domains(domains),
             detail_level=effective_detail,
             show_base_fields=show_base_fields,
+            stereotypes=_parse_domains(stereotypes),
         )
         return PlainTextResponse(mermaid_text)
 
