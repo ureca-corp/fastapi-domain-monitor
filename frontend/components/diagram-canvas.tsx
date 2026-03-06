@@ -132,6 +132,25 @@ function getClassDiagramTheme(theme: "light" | "dark") {
         filter: drop-shadow(0 2px 6px ${palette.shadow});
       }
 
+      g.cluster rect {
+        fill: transparent;
+        stroke: ${palette.borderSoft};
+        stroke-width: 1px;
+        rx: 16px;
+        ry: 16px;
+      }
+
+      g.cluster-label span,
+      g.cluster-label text {
+        color: ${palette.textMuted};
+        fill: ${palette.textMuted};
+        font-family: ${MERMAID_FONT_STACK};
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
       g.classGroup rect {
         fill: ${palette.surfaceMuted};
         stroke: ${palette.borderSoft};
@@ -353,7 +372,8 @@ function roundClassNodes(svgElement: SVGSVGElement, radius: number) {
   }
 
   let idx = 0
-  for (const container of svgElement.querySelectorAll<SVGGElement>("g.basic.label-container")) {
+  // g.node 하위의 컨테이너만 처리 — namespace cluster 라벨(g.cluster 하위)은 제외
+  for (const container of svgElement.querySelectorAll<SVGGElement>("g.node g.basic.label-container")) {
     const fillPath = container.querySelector<SVGPathElement>('path[stroke="none"]')
     if (!fillPath) continue
 
