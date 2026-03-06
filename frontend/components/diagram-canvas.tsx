@@ -335,6 +335,18 @@ function decorateClassDiagramFieldLabels(svgElement: SVGSVGElement) {
 }
 
 function decorateClassDiagramSvg(svgElement: SVGSVGElement) {
+  // Round clip-path rects so rounded corners on classGroup rects aren't clipped away
+  for (const classGroup of svgElement.querySelectorAll<SVGGElement>("g.classGroup")) {
+    const candidates = [classGroup, ...classGroup.querySelectorAll<SVGElement>("[clip-path]")]
+    for (const el of candidates) {
+      const ref = el.getAttribute("clip-path")?.match(/url\(["']?#(.+?)["']?\)/)?.[1]
+      if (!ref) continue
+      const clipPath = svgElement.querySelector(`#${CSS.escape(ref)}`)
+      if (clipPath) {
+        roundSvgRects(clipPath as unknown as SVGSVGElement, "rect", { radius: "28" })
+      }
+    }
+  }
   roundSvgRects(svgElement, ".node rect, g.classGroup rect, .classLabel .box", {
     radius: "28",
   })

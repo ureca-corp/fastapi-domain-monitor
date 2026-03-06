@@ -11,4 +11,4 @@ fastapi-domain-monitor: FastAPI 앱에 한 줄로 마운트하는 도메인 다�
 from fastapi_domain_monitor.plugin import setup_domain_monitor
 
 __all__ = ["setup_domain_monitor"]
-__version__ = "0.1.13"
+__version__ = "0.1.14"
