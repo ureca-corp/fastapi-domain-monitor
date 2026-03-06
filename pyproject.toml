@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-domain-monitor"
-version = "0.1.5"
+version = "0.1.6"
 description = "FastAPI plugin for real-time SQLModel domain diagram visualization"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -18,6 +18,7 @@ Real-time `Mermaid classDiagram` monitoring for Pydantic and SQLModel projects r
 5. FastAPI Integration Options
 6. Standalone Mode
 7. Local Development Notes
+8. Diagram-Friendly Modeling
 
 ### 한국어
 
@@ -28,6 +29,7 @@ Real-time `Mermaid classDiagram` monitoring for Pydantic and SQLModel projects r
 5. FastAPI 연동 옵션
 6. 단독 실행 모드
 7. 로컬 개발 시 주의사항
+8. 다이어그램 친화적인 모델 작성 규칙
 
 ---
 
@@ -187,6 +189,21 @@ http://127.0.0.1:7842/domain-monitor
 - This package is intended for development-time visualization.
 - `uvicorn --reload` usually watches only your application directory.
 - If you install this package as an editable local dependency and modify the library itself, your app server may need a restart before changes appear.
+
+### Diagram-Friendly Modeling
+
+If you want the diagram to reflect your code reliably, keep the model structure visible in static source.
+
+- Put models in watched files such as `*_models.py`, `models.py`, `*_schemas.py`, `schemas.py`, `*_entities.py`, `entities.py`, `*_dto.py`, and `dto.py`.
+- Declare ORM relationships with `Relationship(...)`.
+- Prefer direct type annotations for nested models and enums, for example `status: ExamStatus` and `items: list[LineItem]`.
+- If an enum-backed field must stay `str`, expose the enum statically with one of these patterns:
+  - `status: str = Field(default=ExamStatus.DRAFT)`
+  - `sa_column=Column(SAEnum(ExamStatus, ...))`
+  - `status: str  # ExamStatus`
+  - `return self.status == ExamStatus.DRAFT`
+- Keep `table=True`, `__tablename__`, `model_config`, and `ConfigDict` in the class body instead of building them dynamically.
+- Avoid runtime-only schema generation patterns if diagram fidelity matters.
 
 ### Links
 
@@ -351,6 +368,21 @@ http://127.0.0.1:7842/domain-monitor
 - 이 패키지는 개발 중 시각화 도구입니다.
 - `uvicorn --reload`는 보통 현재 앱 디렉터리만 감시합니다.
 - 이 패키지를 editable 로컬 dependency로 연결해 두고 라이브러리 자체를 수정하는 경우, 앱 서버를 한 번 재시작해야 반영될 수 있습니다.
+
+### 다이어그램 친화적인 모델 작성 규칙
+
+다이어그램에 코드가 안정적으로 반영되게 하려면, 모델 구조가 정적인 소스 코드 안에 직접 드러나게 작성하는 편이 좋습니다.
+
+- 모델 파일은 `*_models.py`, `models.py`, `*_schemas.py`, `schemas.py`, `*_entities.py`, `entities.py`, `*_dto.py`, `dto.py` 같은 감시 패턴 안에 두는 것이 안전합니다.
+- ORM 관계는 `Relationship(...)`로 선언합니다.
+- 중첩 모델과 enum은 `status: ExamStatus`, `items: list[LineItem]`처럼 타입에 직접 드러내는 것이 가장 안정적입니다.
+- enum 기반 필드를 꼭 `str`로 유지해야 한다면, 아래 중 하나처럼 정적 단서를 남겨야 합니다.
+  - `status: str = Field(default=ExamStatus.DRAFT)`
+  - `sa_column=Column(SAEnum(ExamStatus, ...))`
+  - `status: str  # ExamStatus`
+  - `return self.status == ExamStatus.DRAFT`
+- `table=True`, `__tablename__`, `model_config`, `ConfigDict` 같은 메타데이터는 클래스 본문에 명시적으로 둡니다.
+- 런타임에만 의미가 드러나는 동적 생성 패턴은 다이어그램 정확도가 떨어질 수 있습니다.
 
 ### 링크
 

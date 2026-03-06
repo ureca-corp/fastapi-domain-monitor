@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -358,6 +360,46 @@ def _field_constraints(call: ast.Call) -> dict[str, str]:
     return constraints
 
 
+def _enum_ref_from_default_repr(default_repr: str | None) -> str | None:
+    if not default_repr or "." not in default_repr:
+        return None
+    candidate = default_repr.split(".", 1)[0].strip("'\"")
+    if not candidate or candidate in {"self", "cls"}:
+        return None
+    return candidate
+
+
+def _extract_sa_enum_ref(node: ast.AST | None) -> str | None:
+    if node is None:
+        return None
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if not _is_call_named(child, "SAEnum") and not _is_call_named(child, "Enum"):
+            continue
+        if not child.args:
+            continue
+        ref = _last_name(child.args[0])
+        if ref:
+            return ref
+    return None
+
+
+def _enum_ref_from_line_comment(source_lines: tuple[str, ...], node: ast.AST) -> str | None:
+    line_number = getattr(node, "lineno", 0)
+    if line_number <= 0 or line_number > len(source_lines):
+        return None
+
+    line = source_lines[line_number - 1]
+    if "#" not in line:
+        return None
+
+    comment = line.split("#", 1)[1].strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_\.]*", comment):
+        return None
+    return comment.rsplit(".", 1)[-1]
+
+
 def _apply_field_call_metadata(field: ParsedField, call: ast.Call) -> None:
     field.is_primary_key = _get_keyword_bool(call, "primary_key")
     field.foreign_key = _get_keyword_str(call, "foreign_key")
@@ -371,6 +413,9 @@ def _apply_field_call_metadata(field: ParsedField, call: ast.Call) -> None:
     field.has_default = _field_has_default(call)
     field.default_repr, field.default_factory = _field_default_repr(call)
     field.constraints.update(_field_constraints(call))
+    field.enum_ref_hint = _enum_ref_from_default_repr(field.default_repr) or _extract_sa_enum_ref(
+        _get_keyword_value(call, "sa_column")
+    )
 
 
 def _check_uselist_false(call: ast.Call) -> bool:
@@ -384,7 +429,7 @@ def _check_delete_orphan(call: ast.Call) -> bool:
     return "delete-orphan" in cascade
 
 
-def _parse_field(node: ast.AnnAssign) -> ParsedField | None:
+def _parse_field(node: ast.AnnAssign, source_lines: tuple[str, ...]) -> ParsedField | None:
     if not isinstance(node.target, ast.Name):
         return None
 
@@ -410,6 +455,7 @@ def _parse_field(node: ast.AnnAssign) -> ParsedField | None:
     elif node.value is not None and not _is_call_named(node.value, "Relationship"):
         field.has_default = True
         field.default_repr = _normalize_literal(node.value)
+        field.enum_ref_hint = _enum_ref_from_default_repr(field.default_repr)
 
     if _is_call_named(node.value, "PrivateAttr"):
         field.is_private = True
@@ -417,6 +463,10 @@ def _parse_field(node: ast.AnnAssign) -> ParsedField | None:
         field.has_default = True
         field.default_repr = _normalize_literal(node.value.args[0]) if node.value.args else _normalize_literal(_get_keyword_value(node.value, "default"))
         field.default_factory = _expr_to_text(_get_keyword_value(node.value, "default_factory"))
+        field.enum_ref_hint = _enum_ref_from_default_repr(field.default_repr)
+
+    if field.enum_ref_hint is None:
+        field.enum_ref_hint = _enum_ref_from_line_comment(source_lines, node)
 
     return field
 
@@ -504,6 +554,55 @@ def _parse_method(node: ast.FunctionDef) -> tuple[ParsedMethod, ParsedField | No
     return method, synthetic_field
 
 
+def _self_field_name(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self":
+        return node.attr
+    return None
+
+
+def _enum_ref_from_member_expr(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return node.value.id
+    return None
+
+
+def _method_field_enum_hints(node: ast.FunctionDef) -> dict[str, set[str]]:
+    hints: dict[str, set[str]] = defaultdict(set)
+
+    for child in ast.walk(node):
+        if isinstance(child, ast.Compare):
+            left_field = _self_field_name(child.left)
+            if left_field:
+                for comparator in child.comparators:
+                    enum_ref = _enum_ref_from_member_expr(comparator)
+                    if enum_ref:
+                        hints[left_field].add(enum_ref)
+
+            for comparator in child.comparators:
+                right_field = _self_field_name(comparator)
+                if right_field:
+                    enum_ref = _enum_ref_from_member_expr(child.left)
+                    if enum_ref:
+                        hints[right_field].add(enum_ref)
+
+        elif isinstance(child, ast.Assign):
+            enum_ref = _enum_ref_from_member_expr(child.value)
+            if not enum_ref:
+                continue
+            for target in child.targets:
+                field_name = _self_field_name(target)
+                if field_name:
+                    hints[field_name].add(enum_ref)
+
+        elif isinstance(child, ast.AnnAssign):
+            field_name = _self_field_name(child.target)
+            enum_ref = _enum_ref_from_member_expr(child.value)
+            if field_name and enum_ref:
+                hints[field_name].add(enum_ref)
+
+    return hints
+
+
 def _config_from_call(node: ast.Call) -> dict[str, str]:
     config: dict[str, str] = {}
     for kw in node.keywords:
@@ -584,7 +683,7 @@ def _parse_enum(cls_node: ast.ClassDef, file_path: Path) -> ParsedEnum:
     )
 
 
-def _parse_class(cls_node: ast.ClassDef, file_path: Path) -> ParsedClass:
+def _parse_class(cls_node: ast.ClassDef, file_path: Path, source_lines: tuple[str, ...]) -> ParsedClass:
     base_classes = []
     for base in cls_node.bases:
         base_name = _last_name(base)
@@ -606,6 +705,7 @@ def _parse_class(cls_node: ast.ClassDef, file_path: Path) -> ParsedClass:
         docstring=docstring,
         is_protocol_like=is_protocol_like,
     )
+    method_enum_hints: dict[str, set[str]] = defaultdict(set)
 
     for item in cls_node.body:
         if isinstance(item, ast.Assign):
@@ -625,13 +725,15 @@ def _parse_class(cls_node: ast.ClassDef, file_path: Path) -> ParsedClass:
             if relationship:
                 parsed_class.relationships.append(relationship)
                 continue
-            field = _parse_field(item)
+            field = _parse_field(item, source_lines)
             if field:
                 parsed_class.fields.append(field)
 
         elif isinstance(item, ast.FunctionDef):
             method, synthetic_field = _parse_method(item)
             parsed_class.methods.append(method)
+            for field_name, refs in _method_field_enum_hints(item).items():
+                method_enum_hints[field_name].update(refs)
             if synthetic_field is not None:
                 parsed_class.fields.append(synthetic_field)
 
@@ -640,6 +742,11 @@ def _parse_class(cls_node: ast.ClassDef, file_path: Path) -> ParsedClass:
 
     parsed_class.is_abstract = "ABC" in parsed_class.base_classes or any(method.is_abstract for method in parsed_class.methods)
     parsed_class.stereotypes = _compute_stereotypes(parsed_class)
+    for field in parsed_class.fields:
+        if field.enum_ref_hint is None:
+            refs = method_enum_hints.get(field.name, set())
+            if len(refs) == 1:
+                field.enum_ref_hint = next(iter(refs))
     return parsed_class
 
 
@@ -713,7 +820,7 @@ def _resolve_schema_references(schema: DomainSchema) -> None:
                 if field.target_symbol_id is None:
                     field.target_symbol_id = _resolve_ref_to_symbol_id(
                         module,
-                        _ref_from_type_annotation(field.type_annotation),
+                        field.enum_ref_hint or _ref_from_type_annotation(field.type_annotation),
                         enum_candidates,
                     )
 
@@ -752,6 +859,7 @@ def parse_file(file_path: Path) -> ParsedModule:
 
     file_path = Path(file_path)
     source = file_path.read_text(encoding="utf-8")
+    source_lines = tuple(source.splitlines())
     tree = ast.parse(source, filename=str(file_path))
     module = ParsedModule(
         domain_name=_extract_domain_name(file_path),
@@ -763,7 +871,7 @@ def parse_file(file_path: Path) -> ParsedModule:
             if _is_enum_class(node):
                 module.enums.append(_parse_enum(node, file_path))
             else:
-                module.classes.append(_parse_class(node, file_path))
+                module.classes.append(_parse_class(node, file_path, source_lines))
 
     _resolve_schema_references(DomainSchema(modules=[module]))
     return module

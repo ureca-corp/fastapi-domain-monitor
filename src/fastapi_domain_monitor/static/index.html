@@ -780,25 +780,30 @@ function updateDiagramSummary() {
   diagramSummary.textContent = `${selectedDomainArray().length} domains · ${totalClasses} classes · ${totalEnums} enums`;
 }
 
+function availableDomains() {
+  return [...new Set((state.schema?.modules || []).map((module) => module.domain_name))];
+}
+
 function renderDomainList() {
   clearChildren(domainListEl);
-  if (!state.schema || !(state.schema.modules || []).length) {
+  const domains = availableDomains();
+  if (domains.length === 0) {
     showMessage(domainListEl, 'No domains found');
     return;
   }
-  (state.schema.modules || []).forEach((module) => {
+  domains.forEach((domain) => {
     const label = document.createElement('label');
     label.className = 'domain-item';
     const text = document.createElement('span');
-    text.textContent = module.domain_name;
+    text.textContent = domain;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.checked = state.selectedDomains.has(module.domain_name);
+    checkbox.checked = state.selectedDomains.has(domain);
     checkbox.addEventListener('change', async () => {
       if (checkbox.checked) {
-        state.selectedDomains.add(module.domain_name);
+        state.selectedDomains.add(domain);
       } else {
-        state.selectedDomains.delete(module.domain_name);
+        state.selectedDomains.delete(domain);
       }
       updateDiagramSummary();
       await renderCurrentView();
@@ -819,7 +824,7 @@ function ingestSchema(payload) {
     baseFieldsToggle.checked = state.showBaseFields;
   }
 
-  const domains = (payload.modules || []).map((module) => module.domain_name);
+  const domains = [...new Set((payload.modules || []).map((module) => module.domain_name))];
   if (state.selectedDomains.size === 0) {
     domains.forEach((domain) => state.selectedDomains.add(domain));
   } else {

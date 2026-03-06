@@ -64,9 +64,15 @@ def test_parse_basic_field_metadata(parsed_sample):
     active_status = _find_field(account, "active_status")
     assert active_status.has_default is True
     assert active_status.default_repr == "ActiveStatus.ACTIVE"
+    assert active_status.target_symbol_id is not None
 
     primary_key = _find_field(account, "id")
     assert primary_key.is_primary_key is True
+
+    exam = _find_class(parsed_sample, "Exam")
+    lifecycle_status = _find_field(exam, "lifecycle_status")
+    assert lifecycle_status.enum_ref_hint == "GradingStatus"
+    assert lifecycle_status.target_symbol_id is not None
 
 
 def test_parse_relationship_metadata(parsed_sample):
@@ -180,6 +186,75 @@ class Invoice(BaseModel, ABC):
 
     charge = _find_method(invoice, "charge")
     assert charge.is_abstract is True
+
+
+def test_parse_method_body_enum_usage_as_field_hint(tmp_path):
+    parsed = _parse_source(
+        tmp_path,
+        """
+from enum import StrEnum
+
+
+class AccountRole(StrEnum):
+    TEACHER = "teacher"
+    STUDENT = "student"
+
+
+class Account:
+    role: str
+
+    @property
+    def is_teacher(self) -> bool:
+        return self.role == AccountRole.TEACHER
+""",
+    )
+
+    account = _find_class(parsed, "Account")
+    role = _find_field(account, "role")
+    enum_symbol = next(item.symbol_id for item in parsed.enums if item.name == "AccountRole")
+
+    assert role.enum_ref_hint == "AccountRole"
+    assert role.target_symbol_id == enum_symbol
+
+
+def test_parse_field_comment_enum_hint(tmp_path):
+    parsed = _parse_source(
+        tmp_path,
+        """
+from enum import StrEnum
+
+
+class SectionType(StrEnum):
+    ESSAY = "essay"
+
+
+class AlimtalkSendStatus(StrEnum):
+    SENT = "sent"
+
+
+class Section:
+    section_type: str  # SectionType
+
+
+class AlimtalkSendResult:
+    status: str  # AlimtalkSendStatus
+    message_type: str | None = None  # alimtalk / sms
+""",
+    )
+
+    section = _find_class(parsed, "Section")
+    result = _find_class(parsed, "AlimtalkSendResult")
+
+    section_type = _find_field(section, "section_type")
+    status = _find_field(result, "status")
+    message_type = _find_field(result, "message_type")
+
+    assert section_type.enum_ref_hint == "SectionType"
+    assert section_type.target_symbol_id == next(item.symbol_id for item in parsed.enums if item.name == "SectionType")
+    assert status.enum_ref_hint == "AlimtalkSendStatus"
+    assert status.target_symbol_id == next(item.symbol_id for item in parsed.enums if item.name == "AlimtalkSendStatus")
+    assert message_type.enum_ref_hint is None
+    assert message_type.target_symbol_id is None
 
 
 def test_parse_directory_uses_extended_patterns(tmp_path):

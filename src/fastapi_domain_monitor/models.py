@@ -39,6 +39,7 @@ class ParsedField:
     is_classvar: bool = False
     is_computed: bool = False
     collection_kind: str | None = None
+    enum_ref_hint: str | None = None
     target_symbol_id: str | None = None
 
 
