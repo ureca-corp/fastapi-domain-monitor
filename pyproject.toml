@@ -4,15 +4,33 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-domain-monitor"
-version = "0.1.3"
+version = "0.1.4"
 description = "FastAPI plugin for real-time SQLModel domain diagram visualization"
+readme = "README.md"
 requires-python = ">=3.11"
+keywords = ["fastapi", "pydantic", "sqlmodel", "mermaid", "diagram"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "fastapi>=0.100.0",
     "watchdog>=4.0.0",
     "uvicorn[standard]>=0.20.0",
     "click>=8.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ureca-corp/fastapi-domain-monitor"
+Repository = "https://github.com/ureca-corp/fastapi-domain-monitor"
+Issues = "https://github.com/ureca-corp/fastapi-domain-monitor/issues"
 
 [project.scripts]
 domain-monitor = "fastapi_domain_monitor.cli:main"
