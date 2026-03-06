@@ -40,15 +40,13 @@ def cli():
 @click.option("--port", "-p", default=7842, show_default=True, help="서버 포트")
 @click.option("--host", default="127.0.0.1", show_default=True, help="서버 호스트")
 @click.option("--open/--no-open", default=True, help="브라우저 자동 열기")
-@click.option("--show-base-fields", is_flag=True, default=False, help="id/created_at 등 기본 필드 표시")
 @click.option(
-    "--detail-level",
-    type=click.Choice(["compact", "full"], case_sensitive=False),
-    default="compact",
+    "--show-base-fields/--hide-base-fields",
+    default=True,
     show_default=True,
-    help="다이어그램 상세도",
+    help="id/created_at 등 기본 필드 표시",
 )
-def start(watch, watch_pattern, port, host, open, show_base_fields, detail_level):
+def start(watch, watch_pattern, port, host, open, show_base_fields):
     """도메인 모니터 서버를 시작합니다."""
 
     from fastapi import FastAPI
@@ -59,7 +57,7 @@ def start(watch, watch_pattern, port, host, open, show_base_fields, detail_level
         watch_dirs=list(watch),
         watch_patterns=list(watch_pattern),
         show_base_fields=show_base_fields,
-        detail_level=detail_level.lower(),
+        detail_level="compact",
     )
 
     url = f"http://{host}:{port}/domain-monitor"
@@ -67,7 +65,6 @@ def start(watch, watch_pattern, port, host, open, show_base_fields, detail_level
     click.echo(f"  → {url}")
     click.echo(f"  → watching: {', '.join(watch)}")
     click.echo(f"  → patterns: {', '.join(watch_pattern)}")
-    click.echo(f"  → detail: {detail_level.lower()}")
     click.echo("  Press Ctrl+C to stop\n")
 
     if open:

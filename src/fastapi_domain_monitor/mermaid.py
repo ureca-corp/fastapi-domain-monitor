@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import html
 
 from .models import DomainSchema, ParsedClass, ParsedEnum, ParsedField, ParsedMethod, ParsedRelationship
 
 BASE_FIELDS = {"id", "created_at", "updated_at", "deleted_at"}
 FRAMEWORK_BASES = {"BaseModel", "SQLModel", "object"}
-DETAIL_LEVELS = {"compact", "full"}
+DETAIL_LEVELS = {"compact"}
 
 
 def generate_mermaid(
@@ -55,14 +54,12 @@ def generate_mermaid(
                 lines,
                 alias_by_symbol_id[parsed_class.symbol_id],
                 show_base_fields=show_base_fields,
-                detail_level=detail_level,
             )
         for parsed_enum in module.enums:
             _render_enum(parsed_enum, lines, alias_by_symbol_id[parsed_enum.symbol_id])
         lines.append("}")
 
     relation_lines: list[str] = []
-    note_lines: list[str] = []
     click_lines: list[str] = []
     seen_relationships: set[tuple[str, str, str, str]] = set()
 
@@ -135,10 +132,6 @@ def generate_mermaid(
                 target_alias = alias_by_symbol_id[field.target_symbol_id]
                 relation_lines.append(_render_composition(source_alias, target_alias, field))
 
-            note = _build_class_note(parsed_class, detail_level)
-            if note:
-                note_lines.append(f'note for {source_alias} "{_escape_note(note)}"')
-
             click_lines.append(f'click {source_alias} call handleSymbolClick() "Open source"')
 
         for parsed_enum in module.enums:
@@ -149,7 +142,6 @@ def generate_mermaid(
     click_lines = _dedupe_preserve_order(click_lines)
 
     lines.extend(relation_lines)
-    lines.extend(note_lines)
     lines.extend(click_lines)
     return "\n".join(lines) + "\n"
 
@@ -168,16 +160,15 @@ def _render_class(
     diagram_id: str,
     *,
     show_base_fields: bool,
-    detail_level: str,
 ) -> None:
     lines.append(f'    class {diagram_id}["{parsed_class.name}"] {{')
     for stereotype in parsed_class.stereotypes:
         lines.append(f"        <<{stereotype}>>")
 
-    for field in _visible_fields(parsed_class.fields, detail_level, show_base_fields):
+    for field in _visible_fields(parsed_class.fields, show_base_fields):
         lines.append(f"        {_format_field(field)}")
 
-    for method in _visible_methods(parsed_class.methods, detail_level):
+    for method in _visible_methods(parsed_class.methods):
         lines.append(f"        {_format_method(method)}")
 
     lines.append("    }")
@@ -193,23 +184,20 @@ def _render_enum(parsed_enum: ParsedEnum, lines: list[str], diagram_id: str) -> 
 
 def _visible_fields(
     fields: list[ParsedField],
-    detail_level: str,
     show_base_fields: bool,
 ) -> list[ParsedField]:
     visible = []
     for field in fields:
         if not show_base_fields and field.name in BASE_FIELDS:
             continue
-        if detail_level == "compact" and (field.is_private or field.is_classvar or field.is_computed):
+        if field.is_private or field.is_classvar or field.is_computed:
             continue
         visible.append(field)
     return sorted(visible, key=lambda field: (not field.is_primary_key, field.is_private, field.name))
 
 
-def _visible_methods(methods: list[ParsedMethod], detail_level: str) -> list[ParsedMethod]:
-    if detail_level == "compact":
-        return [method for method in methods if method.visibility == "public"]
-    return methods
+def _visible_methods(methods: list[ParsedMethod]) -> list[ParsedMethod]:
+    return [method for method in methods if method.visibility == "public"]
 
 
 def _format_field(field: ParsedField) -> str:
@@ -262,55 +250,3 @@ def _render_composition(source_alias: str, target_alias: str, field: ParsedField
     else:
         right = '"1"'
     return f'{source_alias} "1" *-- {right} {target_alias} : {field.name}'
-
-
-def _build_class_note(parsed_class: ParsedClass, detail_level: str) -> str | None:
-    if detail_level != "full":
-        return None
-
-    lines: list[str] = []
-    if parsed_class.docstring:
-        first_paragraph = parsed_class.docstring.strip().split("\n\n", 1)[0].replace("\n", " ").strip()
-        if first_paragraph:
-            lines.append(first_paragraph)
-    if parsed_class.tablename:
-        lines.append(f"table: {parsed_class.tablename}")
-    if parsed_class.model_config:
-        config_summary = ", ".join(
-            f"{key}={value}" for key, value in sorted(parsed_class.model_config.items())
-        )
-        lines.append(f"config: {config_summary}")
-
-    field_metadata = []
-    for field in parsed_class.fields:
-        metadata = []
-        if field.alias:
-            metadata.append(f"alias={field.alias}")
-        if field.constraints:
-            metadata.append(", ".join(f"{key}={value}" for key, value in sorted(field.constraints.items())))
-        if field.is_computed:
-            metadata.append("computed")
-        if metadata:
-            field_metadata.append(f"{field.name}: {'; '.join(metadata)}")
-    if field_metadata:
-        lines.append("fields:")
-        lines.extend(field_metadata)
-
-    method_metadata = []
-    for method in parsed_class.methods:
-        extra_labels = [
-            label for label in method.decorator_labels
-            if label not in {"classmethod", "staticmethod", "property", "cached_property", "abstractmethod"}
-        ]
-        if extra_labels:
-            method_metadata.append(f"{method.name}: {', '.join(extra_labels)}")
-    if method_metadata:
-        lines.append("methods:")
-        lines.extend(method_metadata)
-
-    return "\n".join(lines) if lines else None
-
-
-def _escape_note(text: str) -> str:
-    escaped = html.escape(text, quote=False)
-    return escaped.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "<br/>")

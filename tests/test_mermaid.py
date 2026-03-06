@@ -1,6 +1,8 @@
 """Mermaid classDiagram 생성기 테스트."""
 from pathlib import Path
 
+import pytest
+
 from fastapi_domain_monitor.mermaid import generate_mermaid
 from fastapi_domain_monitor.models import (
     DomainSchema,
@@ -109,60 +111,14 @@ def test_compact_render_includes_methods_and_stereotypes():
     assert "_normalize" not in result
 
 
-def test_full_render_shows_notes_private_and_metadata():
-    invoice = _class(
-        "Invoice",
-        symbol_id="invoice1",
-        fields=[
-            ParsedField(name="amount", type_annotation="int", alias="total_amount", constraints={"gt": "0"}),
-            ParsedField(name="_secret", type_annotation="str", visibility="private", is_private=True, default_repr="'x'"),
-            ParsedField(name="kind", type_annotation="ClassVar[str]", is_classvar=True),
-            ParsedField(name="total", type_annotation="int", is_computed=True),
-        ],
-        methods=[
-            ParsedMethod(name="validate_amount", decorator_labels=["field_validator(amount)"], is_validator=True),
-            ParsedMethod(name="_serialize", visibility="private"),
-        ],
-        stereotypes=["DTO", "Abstract"],
-        is_abstract=True,
-        docstring="Invoice summary.\n\nMore detail.",
-        model_config={"extra": "forbid", "frozen": "True"},
-        tablename="ignored_here",
-    )
-    result = generate_mermaid(
-        DomainSchema(modules=[_module("billing", classes=[invoice])]),
-        detail_level="full",
-    )
+def test_unsupported_detail_level_raises_value_error():
+    invoice = _class("Invoice", symbol_id="invoice1")
 
-    assert "-str _secret = 'x'" in result
-    assert "+ClassVar[str] kind$" in result
-    assert "+int total" in result
-    assert "-_serialize()" in result
-    assert "field_validator(amount)" in result
-    assert "alias=total_amount" in result
-    assert "config: extra=forbid, frozen=True" in result
-    assert "default='x'" not in result
-    note_line = next(line for line in result.splitlines() if line.startswith('note for node_invoice1 '))
-    assert note_line.startswith('note for node_invoice1 "Invoice summary.')
-    assert "<br/>" in note_line
-    assert "\\n" not in note_line
-
-
-def test_full_render_escapes_html_in_notes():
-    article = _class(
-        "Article",
-        symbol_id="article1",
-        docstring="Contains <b>unsafe</b> markup.",
-        model_config={"title": "<script>alert(1)</script>"},
-    )
-    result = generate_mermaid(
-        DomainSchema(modules=[_module("content", classes=[article])]),
-        detail_level="full",
-    )
-
-    note_line = next(line for line in result.splitlines() if line.startswith('note for node_article1 '))
-    assert "&lt;b&gt;unsafe&lt;/b&gt;" in note_line
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in note_line
+    with pytest.raises(ValueError, match="Unsupported detail level"):
+        generate_mermaid(
+            DomainSchema(modules=[_module("billing", classes=[invoice])]),
+            detail_level="full",
+        )
 
 
 def test_inheritance_realization_and_framework_base_filter():

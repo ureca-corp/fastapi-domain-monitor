@@ -1,0 +1,4 @@
+1:"$Sreact.fragment"
+2:I[39756,["/_fastapi-domain-monitor-static/_next/static/chunks/05ee7ea767644a79.js","/_fastapi-domain-monitor-static/_next/static/chunks/28aebee103507eea.js","/_fastapi-domain-monitor-static/_next/static/chunks/f795227749618145.js"],"default"]
+3:I[37457,["/_fastapi-domain-monitor-static/_next/static/chunks/05ee7ea767644a79.js","/_fastapi-domain-monitor-static/_next/static/chunks/28aebee103507eea.js","/_fastapi-domain-monitor-static/_next/static/chunks/f795227749618145.js"],"default"]
+0:{"buildId":"vRWy3zFvGkCDk9Yh3uAjX","rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"loading":null,"isPartial":false}

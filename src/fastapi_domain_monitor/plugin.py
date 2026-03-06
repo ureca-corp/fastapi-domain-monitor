@@ -10,13 +10,19 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.routing import APIRouter
+from fastapi.staticfiles import StaticFiles
+from starlette.routing import Mount
 
 from fastapi_domain_monitor.mermaid import DETAIL_LEVELS, generate_mermaid
 from fastapi_domain_monitor.models import DomainSchema, ParsedClass, ParsedEnum
 from fastapi_domain_monitor.parser import DEFAULT_WATCH_PATTERNS, parse_directory
 from fastapi_domain_monitor.watcher import ModelFileWatcher
+
+STATIC_ROOT = Path(__file__).parent / "static"
+STATIC_EXPORT_DIR = STATIC_ROOT / "dashboard"
+STATIC_ASSET_PREFIX = "/_fastapi-domain-monitor-static"
 
 
 class MonitorState:
@@ -116,6 +122,37 @@ class MonitorState:
             "excerpt": excerpt,
         }
 
+    def file_payload(self, file_path: str) -> dict[str, Any] | None:
+        resolved_file_path = self._resolve_monitored_file(file_path)
+        if resolved_file_path is None:
+            return None
+        if not resolved_file_path.exists() or not resolved_file_path.is_file():
+            raise FileNotFoundError(resolved_file_path)
+
+        content = resolved_file_path.read_text(encoding="utf-8")
+        line_count = content.count("\n") + (1 if content else 0)
+        return {
+            "file_path": str(resolved_file_path),
+            "name": resolved_file_path.name,
+            "content": content,
+            "line_count": line_count,
+        }
+
+    def _resolve_monitored_file(self, file_path: str) -> Path | None:
+        candidate = Path(file_path).expanduser()
+        try:
+            resolved = candidate.resolve(strict=False)
+        except RuntimeError:
+            return None
+
+        for watch_dir in self.watch_dirs:
+            try:
+                resolved.relative_to(watch_dir.resolve())
+            except ValueError:
+                continue
+            return resolved
+        return None
+
     async def broadcast(self, message: dict[str, Any]) -> None:
         disconnected: list[WebSocket] = []
         for ws in self.clients:
@@ -153,10 +190,31 @@ def _resolve_watch_dirs(watch_dirs: list[str | Path] | None) -> list[Path]:
 
 
 def _load_spa_html() -> str:
-    html_path = Path(__file__).parent / "static" / "index.html"
+    html_path = _static_dir() / "index.html"
     if html_path.exists():
         return html_path.read_text(encoding="utf-8")
-    return "<html><body><h1>Domain Monitor</h1><p>static/index.html not found.</p></body></html>"
+    return (
+        "<html><body><h1>Domain Monitor</h1>"
+        "<p>Built frontend assets were not found. Run the frontend export step and sync the output into "
+        "fastapi_domain_monitor/static.</p></body></html>"
+    )
+
+
+def _static_dir() -> Path:
+    if STATIC_EXPORT_DIR.is_dir():
+        return STATIC_EXPORT_DIR
+    return STATIC_ROOT
+
+
+def _mount_static_assets(app: FastAPI) -> None:
+    if any(isinstance(route, Mount) and route.path == STATIC_ASSET_PREFIX for route in app.router.routes):
+        return
+
+    app.mount(
+        STATIC_ASSET_PREFIX,
+        StaticFiles(directory=_static_dir(), html=False, check_dir=False),
+        name="fastapi-domain-monitor-static",
+    )
 
 
 def _parse_domains(domains: str | None) -> list[str] | None:
@@ -171,7 +229,7 @@ def setup_domain_monitor(
     watch_dirs: list[str | Path] | None = None,
     mount_path: str = "/domain-monitor",
     enabled: bool = True,
-    show_base_fields: bool = False,
+    show_base_fields: bool = True,
     watch_patterns: list[str] | tuple[str, ...] | None = None,
     detail_level: str = "compact",
 ) -> None:
@@ -192,8 +250,12 @@ def setup_domain_monitor(
     )
     router = APIRouter()
 
+    @router.get("", response_class=HTMLResponse)
     @router.get("/", response_class=HTMLResponse)
     async def spa_index():
+        index_path = _static_dir() / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
         return HTMLResponse(_load_spa_html())
 
     @router.get("/api/schema", response_class=JSONResponse)
@@ -224,6 +286,16 @@ def setup_domain_monitor(
             raise HTTPException(status_code=404, detail="Source file not found") from None
         if payload is None:
             raise HTTPException(status_code=404, detail="Symbol not found")
+        return JSONResponse(content=payload)
+
+    @router.get("/api/file", response_class=JSONResponse)
+    async def get_file(file_path: str = Query(...)):
+        try:
+            payload = state.file_payload(file_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found") from None
+        if payload is None:
+            raise HTTPException(status_code=404, detail="File not found")
         return JSONResponse(content=payload)
 
     @router.websocket("/ws")
@@ -271,4 +343,5 @@ def setup_domain_monitor(
 
     app.router.lifespan_context = combined_lifespan
 
+    _mount_static_assets(app)
     app.include_router(router, prefix=mount_path)

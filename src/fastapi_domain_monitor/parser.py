@@ -848,7 +848,7 @@ def _iter_model_files(directory: Path, watch_patterns: tuple[str, ...]) -> list[
     files: set[Path] = set()
     for pattern in watch_patterns:
         files.update(directory.rglob(pattern))
-    return sorted(files)
+    return sorted(file_path for file_path in files if file_path.name != "__init__.py")
 
 
 # ── 공개 API ─────────────────────────────────────────────────

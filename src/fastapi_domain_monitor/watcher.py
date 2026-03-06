@@ -58,6 +58,8 @@ class ModelFileWatcher(FileSystemEventHandler):
         self._schedule_callback()
 
     def _matches_patterns(self, filename: str) -> bool:
+        if filename == "__init__.py":
+            return False
         return any(fnmatch.fnmatch(filename, pattern) for pattern in self._watch_patterns)
 
     def _schedule_callback(self) -> None:

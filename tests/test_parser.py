@@ -275,6 +275,21 @@ def test_parse_directory_uses_extended_patterns(tmp_path):
     assert classes == {"AccountSchema", "InvoiceDTO"}
 
 
+def test_parse_directory_excludes_init_modules(tmp_path):
+    accounts_dir = tmp_path / "accounts"
+    accounts_dir.mkdir()
+
+    (accounts_dir / "__init__.py").write_text("class PackageMarker:\n    pass\n", encoding="utf-8")
+    (accounts_dir / "schemas.py").write_text("class AccountSchema:\n    id: int\n", encoding="utf-8")
+
+    schema = parse_directory([tmp_path], watch_patterns=["*.py"])
+    parsed_files = {module.file_path.name for module in schema.modules}
+    classes = {parsed_class.name for parsed_class in schema.all_classes()}
+
+    assert parsed_files == {"schemas.py"}
+    assert classes == {"AccountSchema"}
+
+
 def test_field_nullable_and_defaults_from_field_call(tmp_path):
     parsed = _parse_source(
         tmp_path,
