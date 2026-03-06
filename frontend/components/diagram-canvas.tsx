@@ -409,8 +409,20 @@ function roundClassNodes(svgElement: SVGSVGElement, radius: number) {
   }
 }
 
-function decorateClassDiagramSvg(svgElement: SVGSVGElement) {
+function styleClusterRects(svgElement: SVGSVGElement, palette: MermaidPalette) {
+  for (const rect of svgElement.querySelectorAll<SVGRectElement>("g.cluster rect")) {
+    // inline style로 설정해야 Mermaid 내부 CSS보다 우선순위가 높음
+    rect.style.fill = "transparent"
+    rect.style.stroke = palette.borderSoft
+    rect.style.strokeWidth = "1px"
+    rect.setAttribute("rx", "16")
+    rect.setAttribute("ry", "16")
+  }
+}
+
+function decorateClassDiagramSvg(svgElement: SVGSVGElement, palette: MermaidPalette) {
   roundClassNodes(svgElement, 28)
+  styleClusterRects(svgElement, palette)
   roundSvgRects(svgElement, ".edgeLabel .label rect", {
     radius: "999",
     radiusY: "999",
@@ -621,7 +633,7 @@ export function DiagramCanvas({
         const adoptedSvg = document.adoptNode(svgElement) as unknown as SVGSVGElement
         adoptedSvg.classList.add("h-auto", "w-auto", "mermaid-diagram")
         if (isClassDiagram) {
-          decorateClassDiagramSvg(adoptedSvg)
+          decorateClassDiagramSvg(adoptedSvg, getMermaidPalette(theme))
           adoptedSvg.classList.add("mermaid-class-diagram")
           adoptedSvg.dataset.diagramType = "class"
         }
