@@ -128,7 +128,7 @@ function getClassDiagramTheme(theme: "light" | "dark") {
         stroke-width: 1.2px;
       }
 
-      g.classGroup {
+      g.node.default {
         filter: drop-shadow(0 2px 6px ${palette.shadow});
       }
 
@@ -334,22 +334,63 @@ function decorateClassDiagramFieldLabels(svgElement: SVGSVGElement) {
   }
 }
 
-function decorateClassDiagramSvg(svgElement: SVGSVGElement) {
-  // Round clip-path rects so rounded corners on classGroup rects aren't clipped away
-  for (const classGroup of svgElement.querySelectorAll<SVGGElement>("g.classGroup")) {
-    const candidates = [classGroup, ...classGroup.querySelectorAll<SVGElement>("[clip-path]")]
-    for (const el of candidates) {
-      const ref = el.getAttribute("clip-path")?.match(/url\(["']?#(.+?)["']?\)/)?.[1]
-      if (!ref) continue
-      const clipPath = svgElement.querySelector(`#${CSS.escape(ref)}`)
-      if (clipPath) {
-        roundSvgRects(clipPath as unknown as SVGSVGElement, "rect", { radius: "28" })
-      }
-    }
+function roundedRectD(xMin: number, yMin: number, xMax: number, yMax: number, r: number): string {
+  const rx = Math.min(r, (xMax - xMin) / 2)
+  const ry = Math.min(r, (yMax - yMin) / 2)
+  return (
+    `M ${xMin + rx},${yMin} L ${xMax - rx},${yMin} Q ${xMax},${yMin} ${xMax},${yMin + ry} ` +
+    `L ${xMax},${yMax - ry} Q ${xMax},${yMax} ${xMax - rx},${yMax} ` +
+    `L ${xMin + rx},${yMax} Q ${xMin},${yMax} ${xMin},${yMax - ry} ` +
+    `L ${xMin},${yMin + ry} Q ${xMin},${yMin} ${xMin + rx},${yMin} Z`
+  )
+}
+
+function roundClassNodes(svgElement: SVGSVGElement, radius: number) {
+  let defs = svgElement.querySelector("defs")
+  if (!defs) {
+    defs = document.createElementNS("http://www.w3.org/2000/svg", "defs")
+    svgElement.prepend(defs)
   }
-  roundSvgRects(svgElement, ".node rect, g.classGroup rect, .classLabel .box", {
-    radius: "28",
-  })
+
+  let idx = 0
+  for (const container of svgElement.querySelectorAll<SVGGElement>("g.basic.label-container")) {
+    const fillPath = container.querySelector<SVGPathElement>('path[stroke="none"]')
+    if (!fillPath) continue
+
+    let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity
+    for (const m of (fillPath.getAttribute("d") ?? "").matchAll(/[ML]\s*([-\d.]+)\s+([-\d.]+)/g)) {
+      const x = parseFloat(m[1]), y = parseFloat(m[2])
+      if (x < xMin) xMin = x
+      if (y < yMin) yMin = y
+      if (x > xMax) xMax = x
+      if (y > yMax) yMax = y
+    }
+    if (!isFinite(xMin)) continue
+
+    const newD = roundedRectD(xMin, yMin, xMax, yMax, radius)
+    // fill path와 border path 모두 같은 둥근 사각형으로 교체
+    for (const p of container.querySelectorAll<SVGPathElement>("path")) {
+      p.setAttribute("d", newD)
+    }
+
+    const clipId = `node-clip-${idx++}`
+    const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath")
+    clipPath.id = clipId
+    const cr = document.createElementNS("http://www.w3.org/2000/svg", "rect")
+    cr.setAttribute("x", String(xMin))
+    cr.setAttribute("y", String(yMin))
+    cr.setAttribute("width", String(xMax - xMin))
+    cr.setAttribute("height", String(yMax - yMin))
+    cr.setAttribute("rx", String(radius))
+    cr.setAttribute("ry", String(radius))
+    clipPath.appendChild(cr)
+    defs.appendChild(clipPath)
+    container.setAttribute("clip-path", `url(#${clipId})`)
+  }
+}
+
+function decorateClassDiagramSvg(svgElement: SVGSVGElement) {
+  roundClassNodes(svgElement, 28)
   roundSvgRects(svgElement, ".edgeLabel .label rect", {
     radius: "999",
     radiusY: "999",
