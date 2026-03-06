@@ -1,6 +1,4 @@
 class FastapiDomainMonitor < Formula
-  include Language::Python::Virtualenv
-
   desc "Real-time SQLModel domain diagram dashboard for FastAPI projects"
   homepage "https://github.com/ureca-corp/fastapi-domain-monitor"
   url "https://github.com/ureca-corp/fastapi-domain-monitor/archive/refs/tags/v0.1.0.tar.gz"
@@ -11,8 +9,11 @@ class FastapiDomainMonitor < Formula
 
   def install
     python3 = Formula["python@3.12"].opt_bin/"python3.12"
-    venv = virtualenv_create(libexec, python3)
-    venv.pip_install(buildpath)
+
+    # Homebrew의 venv.pip_install()은 --no-deps를 붙이므로 직접 호출
+    system python3, "-m", "venv", libexec
+    system libexec/"bin/pip", "install", "--no-cache-dir", buildpath.to_s
+
     bin.install_symlink libexec/"bin/domain-monitor"
   end
 
