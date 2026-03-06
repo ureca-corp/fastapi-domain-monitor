@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import html
 
 from .models import DomainSchema, ParsedClass, ParsedEnum, ParsedField, ParsedMethod, ParsedRelationship
 
@@ -306,4 +307,5 @@ def _build_class_note(parsed_class: ParsedClass, detail_level: str) -> str | Non
 
 
 def _escape_note(text: str) -> str:
-    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    escaped = html.escape(text, quote=False)
+    return escaped.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "<br/>")

@@ -136,10 +136,30 @@ def test_full_render_shows_notes_private_and_metadata():
     assert "+ClassVar[str] kind$" in result
     assert "+int total" in result
     assert "-_serialize()" in result
-    assert 'note for node_invoice1 "Invoice summary.' in result
     assert "field_validator(amount)" in result
     assert "alias=total_amount" in result
     assert "config: extra=forbid, frozen=True" in result
+    note_line = next(line for line in result.splitlines() if line.startswith('note for node_invoice1 '))
+    assert note_line.startswith('note for node_invoice1 "Invoice summary.')
+    assert "<br/>" in note_line
+    assert "\\n" not in note_line
+
+
+def test_full_render_escapes_html_in_notes():
+    article = _class(
+        "Article",
+        symbol_id="article1",
+        docstring="Contains <b>unsafe</b> markup.",
+        model_config={"title": "<script>alert(1)</script>"},
+    )
+    result = generate_mermaid(
+        DomainSchema(modules=[_module("content", classes=[article])]),
+        detail_level="full",
+    )
+
+    note_line = next(line for line in result.splitlines() if line.startswith('note for node_article1 '))
+    assert "&lt;b&gt;unsafe&lt;/b&gt;" in note_line
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in note_line
 
 
 def test_inheritance_realization_and_framework_base_filter():
