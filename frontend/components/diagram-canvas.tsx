@@ -55,6 +55,7 @@ const MERMAID_FONT_STACK =
 const MERMAID_MONO_STACK =
   '"JetBrains Mono Variable", "SFMono-Regular", ui-monospace, monospace'
 const MERMAID_FIELD_VISIBILITY_PREFIXES = new Set(["+", "-", "#", "~"])
+const MEMBER_EXTRA_H = 0 // height expansion per field row (0 = horizontal inline layout)
 
 type MermaidFieldParts = {
   defaultLine: string | null
@@ -318,38 +319,68 @@ function createMemberLine(label: string, documentNode: Document, className: stri
 }
 
 function decorateClassDiagramFieldLabels(svgElement: SVGSVGElement) {
-  for (const label of svgElement.querySelectorAll<SVGGElement>(".members-group .label")) {
-    const foreignObject = label.querySelector("foreignObject")
-    const contentWrapper = foreignObject?.querySelector("div")
-    const content = contentWrapper?.querySelector("span.nodeLabel")
+  for (const membersGroup of svgElement.querySelectorAll<SVGGElement>(".members-group")) {
+    const labels = Array.from(membersGroup.querySelectorAll<SVGGElement>(".label"))
+    let yOffset = 0
 
-    if (!(foreignObject instanceof SVGForeignObjectElement)) {
-      continue
+    for (const label of labels) {
+      if (yOffset > 0) {
+        const tf = label.getAttribute("transform") ?? ""
+        const m = /translate\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(tf)
+        if (m) {
+          label.setAttribute("transform", `translate(${m[1]}, ${parseFloat(m[2]) + yOffset})`)
+        }
+      }
+
+      const foreignObject = label.querySelector("foreignObject")
+      const contentWrapper = foreignObject?.querySelector("div")
+      const content = contentWrapper?.querySelector("span.nodeLabel")
+
+      if (!(foreignObject instanceof SVGForeignObjectElement)) {
+        continue
+      }
+      if (!(contentWrapper instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+        continue
+      }
+
+      const field = parseMermaidFieldLabel(content.textContent ?? "")
+      if (!field) {
+        continue
+      }
+
+      content.classList.add("mermaid-member-stack")
+      content.replaceChildren(
+        createMemberLine(field.signature, document, "mermaid-member-type"),
+        createMemberLine(field.name, document, "mermaid-member-name"),
+        ...(field.defaultLine
+          ? [createMemberLine(field.defaultLine, document, "mermaid-member-default")]
+          : [])
+      )
+
+      contentWrapper.style.display = "flex"
+      contentWrapper.style.alignItems = "center"
+      contentWrapper.style.height = "100%"
+      contentWrapper.style.maxWidth = "none"
+      contentWrapper.style.textAlign = "left"
+      contentWrapper.style.whiteSpace = "normal"
+
+      const currentH = parseFloat(foreignObject.getAttribute("height") ?? "20")
+      foreignObject.setAttribute("height", String(currentH + MEMBER_EXTRA_H))
+      yOffset += MEMBER_EXTRA_H
     }
-    if (!(contentWrapper instanceof HTMLElement) || !(content instanceof HTMLElement)) {
-      continue
+
+    if (yOffset > 0) {
+      const bgRect = membersGroup.querySelector<SVGRectElement>("rect")
+      if (bgRect) {
+        const h = parseFloat(bgRect.getAttribute("height") ?? "0")
+        bgRect.setAttribute("height", String(h + yOffset))
+      }
+      // Mark the label-container (or node group) so roundClassNodes can extend the clip-path
+      const labelContainer =
+        membersGroup.closest<SVGGElement>("g.basic.label-container") ??
+        membersGroup.closest<SVGGElement>("g.node")?.querySelector<SVGGElement>("g.basic.label-container")
+      labelContainer?.setAttribute("data-extra-height", String(yOffset))
     }
-
-    const field = parseMermaidFieldLabel(content.textContent ?? "")
-    if (!field) {
-      continue
-    }
-
-    content.classList.add("mermaid-member-stack")
-    content.replaceChildren(
-      createMemberLine(field.signature, document, "mermaid-member-type"),
-      createMemberLine(field.name, document, "mermaid-member-name"),
-      ...(field.defaultLine
-        ? [createMemberLine(field.defaultLine, document, "mermaid-member-default")]
-        : [])
-    )
-
-    contentWrapper.style.display = "flex"
-    contentWrapper.style.alignItems = "center"
-    contentWrapper.style.height = "100%"
-    contentWrapper.style.maxWidth = "none"
-    contentWrapper.style.textAlign = "left"
-    contentWrapper.style.whiteSpace = "normal"
   }
 }
 
@@ -387,6 +418,10 @@ function roundClassNodes(svgElement: SVGSVGElement, radius: number) {
     }
     if (!isFinite(xMin)) continue
 
+    // Extend yMax to include any member rows expanded by decorateClassDiagramFieldLabels
+    const extraH = parseFloat(container.getAttribute("data-extra-height") ?? "0")
+    yMax += extraH
+
     const newD = roundedRectD(xMin, yMin, xMax, yMax, radius)
     // fill path와 border path 모두 같은 둥근 사각형으로 교체
     for (const p of container.querySelectorAll<SVGPathElement>("path")) {
@@ -421,13 +456,14 @@ function styleClusterRects(svgElement: SVGSVGElement, palette: MermaidPalette) {
 }
 
 function decorateClassDiagramSvg(svgElement: SVGSVGElement, palette: MermaidPalette) {
+  // Must run before roundClassNodes so clip-paths are computed on expanded bounds
+  decorateClassDiagramFieldLabels(svgElement)
   roundClassNodes(svgElement, 28)
   styleClusterRects(svgElement, palette)
   roundSvgRects(svgElement, ".edgeLabel .label rect", {
     radius: "999",
     radiusY: "999",
   })
-  decorateClassDiagramFieldLabels(svgElement)
 }
 
 export function DiagramCanvas({

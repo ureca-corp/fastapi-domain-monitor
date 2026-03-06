@@ -190,13 +190,13 @@
 
 .mermaid-class-diagram .members-group .mermaid-member-stack {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-evenly;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-start;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  gap: 0;
+  gap: 4px;
   line-height: 1;
 }
 
@@ -205,20 +205,20 @@
 }
 
 .mermaid-class-diagram .members-group .mermaid-member-type {
-  color: color-mix(in oklab, var(--foreground) 58%, transparent);
-  display: block;
+  color: color-mix(in oklab, var(--foreground) 55%, transparent);
+  display: inline;
   font-size: 6.8px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 .mermaid-class-diagram .members-group .mermaid-member-name {
   color: var(--foreground);
-  display: block;
+  display: inline;
   font-size: 8.4px;
   font-weight: 700;
   letter-spacing: -0.015em;
-  padding-left: 4px;
 }
 
 .mermaid-class-diagram .members-group .mermaid-member-default {
