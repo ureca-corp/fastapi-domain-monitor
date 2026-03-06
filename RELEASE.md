@@ -25,17 +25,17 @@ MAJOR.MINOR.PATCH
   └────────────── 하위 비호환 변경 (API 변경, 삭제)
 ```
 
-**현재 버전**: `0.1.4`
+**현재 버전**: `0.1.5`
 
 버전 소스는 `pyproject.toml` 단일 파일:
 ```toml
 [project]
-version = "0.1.4"
+version = "0.1.5"
 ```
 
 `src/fastapi_domain_monitor/__init__.py`의 `__version__`도 함께 수정:
 ```python
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 ```
 
 ---

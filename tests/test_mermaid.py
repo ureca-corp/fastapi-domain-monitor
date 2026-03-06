@@ -83,7 +83,8 @@ def test_compact_render_includes_methods_and_stereotypes():
         symbol_id="account1",
         fields=[
             ParsedField(name="id", type_annotation="UUID", is_primary_key=True),
-            ParsedField(name="email", type_annotation="str"),
+            ParsedField(name="email", type_annotation="str", default_repr="'demo@example.com'"),
+            ParsedField(name="slug", type_annotation="str", default_factory="build_slug"),
             ParsedField(name="_secret", type_annotation="str", visibility="private", is_private=True),
             ParsedField(name="kind", type_annotation="ClassVar[str]", visibility="public", is_classvar=True),
             ParsedField(name="total", type_annotation="int", is_computed=True),
@@ -99,7 +100,8 @@ def test_compact_render_includes_methods_and_stereotypes():
 
     assert 'class node_account1["Account"] {' in result
     assert "<<Entity>>" in result
-    assert "+str email" in result
+    assert "+str email = 'demo@example.com'" in result
+    assert "+str slug = build_slug()" in result
     assert "+login() bool" in result
     assert "_secret" not in result
     assert "ClassVar" not in result
@@ -132,13 +134,14 @@ def test_full_render_shows_notes_private_and_metadata():
         detail_level="full",
     )
 
-    assert "-str _secret" in result
+    assert "-str _secret = 'x'" in result
     assert "+ClassVar[str] kind$" in result
     assert "+int total" in result
     assert "-_serialize()" in result
     assert "field_validator(amount)" in result
     assert "alias=total_amount" in result
     assert "config: extra=forbid, frozen=True" in result
+    assert "default='x'" not in result
     note_line = next(line for line in result.splitlines() if line.startswith('note for node_invoice1 '))
     assert note_line.startswith('note for node_invoice1 "Invoice summary.')
     assert "<br/>" in note_line

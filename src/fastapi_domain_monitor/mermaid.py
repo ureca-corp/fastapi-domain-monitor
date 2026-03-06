@@ -217,7 +217,16 @@ def _format_field(field: ParsedField) -> str:
     type_label = "JSON" if field.is_json else field.type_annotation
     nullable = "?" if field.is_nullable else ""
     classifier = "$" if field.is_classvar else ""
-    return f"{prefix}{type_label}{nullable} {field.name}{classifier}"
+    default_suffix = _format_field_default(field)
+    return f"{prefix}{type_label}{nullable} {field.name}{classifier}{default_suffix}"
+
+
+def _format_field_default(field: ParsedField) -> str:
+    if field.default_repr is not None:
+        return f" = {field.default_repr}"
+    if field.default_factory:
+        return f" = {field.default_factory}()"
+    return ""
 
 
 def _format_method(method: ParsedMethod) -> str:
@@ -277,10 +286,6 @@ def _build_class_note(parsed_class: ParsedClass, detail_level: str) -> str | Non
         metadata = []
         if field.alias:
             metadata.append(f"alias={field.alias}")
-        if field.default_repr is not None:
-            metadata.append(f"default={field.default_repr}")
-        if field.default_factory:
-            metadata.append(f"default_factory={field.default_factory}")
         if field.constraints:
             metadata.append(", ".join(f"{key}={value}" for key, value in sorted(field.constraints.items())))
         if field.is_computed:
