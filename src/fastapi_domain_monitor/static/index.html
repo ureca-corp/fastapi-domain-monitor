@@ -541,6 +541,7 @@ const state = {
   scale: 1,
   panX: 0,
   panY: 0,
+  hasUserViewportOverride: false,
 };
 
 const MAX_RETRY_DELAY = 30000;
@@ -556,7 +557,7 @@ function applyTheme(theme) {
     theme: theme === 'dark' ? 'dark' : 'base',
     securityLevel: 'loose',
     class: {
-      hideEmptyMembersBox: false,
+      hideEmptyMembersBox: true,
     },
   });
 }
@@ -626,7 +627,50 @@ function resetTransform() {
   state.scale = 1;
   state.panX = 0;
   state.panY = 0;
+  state.hasUserViewportOverride = false;
   diagramContainer.style.transform = 'none';
+}
+
+function getSvgIntrinsicSize(svgEl) {
+  const viewBox = svgEl.viewBox && svgEl.viewBox.baseVal;
+  if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
+    return { width: viewBox.width, height: viewBox.height };
+  }
+
+  const widthAttr = Number.parseFloat(svgEl.getAttribute('width') || '');
+  const heightAttr = Number.parseFloat(svgEl.getAttribute('height') || '');
+  if (Number.isFinite(widthAttr) && widthAttr > 0 && Number.isFinite(heightAttr) && heightAttr > 0) {
+    return { width: widthAttr, height: heightAttr };
+  }
+
+  const box = svgEl.getBBox();
+  return { width: box.width, height: box.height };
+}
+
+function fitDiagramToViewport() {
+  const svgEl = diagramContainer.querySelector('svg');
+  if (!svgEl) {
+    resetTransform();
+    return;
+  }
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const { width, height } = getSvgIntrinsicSize(svgEl);
+  if (!(wrapperRect.width > 0 && wrapperRect.height > 0 && width > 0 && height > 0)) {
+    resetTransform();
+    svgEl.style.width = '';
+    svgEl.style.height = '';
+    return;
+  }
+
+  const padding = 32;
+  const availableWidth = Math.max(wrapperRect.width - padding * 2, 1);
+  const availableHeight = Math.max(wrapperRect.height - padding * 2, 1);
+  const fitScale = Math.min(1, availableWidth / width, availableHeight / height);
+
+  svgEl.style.width = `${Math.max(width * fitScale, 1)}px`;
+  svgEl.style.height = `${Math.max(height * fitScale, 1)}px`;
+  resetTransform();
 }
 
 let isPanning = false;
@@ -636,6 +680,7 @@ let startY = 0;
 wrapper.addEventListener('mousedown', (event) => {
   if (event.button !== 0) return;
   isPanning = true;
+  state.hasUserViewportOverride = true;
   startX = event.clientX - state.panX;
   startY = event.clientY - state.panY;
   event.preventDefault();
@@ -659,6 +704,7 @@ wrapper.addEventListener('wheel', (event) => {
   const mouseY = event.clientY - rect.top;
   const delta = event.deltaY > 0 ? 0.9 : 1.1;
   const nextScale = Math.min(5, Math.max(0.12, state.scale * delta));
+  state.hasUserViewportOverride = true;
   const ratio = nextScale / state.scale;
   state.panX = mouseX - ratio * (mouseX - state.panX);
   state.panY = mouseY - ratio * (mouseY - state.panY);
@@ -666,7 +712,13 @@ wrapper.addEventListener('wheel', (event) => {
   applyTransform();
 }, { passive: false });
 
-wrapper.addEventListener('dblclick', resetTransform);
+wrapper.addEventListener('dblclick', fitDiagramToViewport);
+
+window.addEventListener('resize', () => {
+  if (!state.hasUserViewportOverride) {
+    fitDiagramToViewport();
+  }
+});
 
 function selectedDomainArray() {
   return Array.from(state.selectedDomains);
@@ -843,7 +895,7 @@ async function renderMermaid(source) {
     if (bindFunctions) {
       bindFunctions(diagramContainer);
     }
-    resetTransform();
+    fitDiagramToViewport();
     applySearchHighlight();
     applySelectedHighlight();
   } catch (error) {
