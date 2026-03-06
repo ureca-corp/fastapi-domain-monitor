@@ -78,6 +78,8 @@ def generate_mermaid(
 
     for module in filtered_modules:
         for parsed_class in module.classes:
+            if parsed_class.symbol_id not in visible_class_ids:
+                continue
             source_alias = alias_by_symbol_id[parsed_class.symbol_id]
 
             for base_symbol_id in parsed_class.base_symbol_ids:
@@ -148,6 +150,8 @@ def generate_mermaid(
             click_lines.append(f'click {source_alias} call handleSymbolClick() "Open source"')
 
         for parsed_enum in module.enums:
+            if parsed_enum.symbol_id not in visible_enum_ids:
+                continue
             enum_alias = alias_by_symbol_id[parsed_enum.symbol_id]
             click_lines.append(f'click {enum_alias} call handleSymbolClick() "Open source"')
 
