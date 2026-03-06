@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, "..")
-const sourceDir = path.join(repoRoot, "frontend", "out")
+const sourceDir = path.join(repoRoot, "frontend", "dist")
 const targetDir = path.join(repoRoot, "src", "fastapi_domain_monitor", "static", "dashboard")
 
 async function main() {

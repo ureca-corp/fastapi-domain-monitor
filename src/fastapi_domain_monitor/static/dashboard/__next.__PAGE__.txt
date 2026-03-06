@@ -1,6 +1,0 @@
-1:"$Sreact.fragment"
-2:I[92392,["/_fastapi-domain-monitor-static/_next/static/chunks/05ee7ea767644a79.js","/_fastapi-domain-monitor-static/_next/static/chunks/28aebee103507eea.js","/_fastapi-domain-monitor-static/_next/static/chunks/af6bea887cc61e0e.js","/_fastapi-domain-monitor-static/_next/static/chunks/e2e92ca4b997c593.js"],"DomainMonitorDashboard"]
-3:I[97367,["/_fastapi-domain-monitor-static/_next/static/chunks/f795227749618145.js"],"OutletBoundary"]
-4:"$Sreact.suspense"
-0:{"buildId":"vRWy3zFvGkCDk9Yh3uAjX","rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","script","script-0",{"src":"/_fastapi-domain-monitor-static/_next/static/chunks/af6bea887cc61e0e.js","async":true}],["$","script","script-1",{"src":"/_fastapi-domain-monitor-static/_next/static/chunks/e2e92ca4b997c593.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
-5:null

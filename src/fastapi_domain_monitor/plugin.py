@@ -195,7 +195,7 @@ def _load_spa_html() -> str:
         return html_path.read_text(encoding="utf-8")
     return (
         "<html><body><h1>Domain Monitor</h1>"
-        "<p>Built frontend assets were not found. Run the frontend export step and sync the output into "
+        "<p>Built frontend assets were not found. Run the frontend build step and sync the output into "
         "fastapi_domain_monitor/static.</p></body></html>"
     )
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Expand, Minus, Move, Plus, RotateCcw, SearchX } from "lucide-react"
+import { Expand, Minus, Move, Plus, SearchX } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -386,10 +386,6 @@ export function DiagramCanvas({
 
         <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
           <div className="flex items-center gap-1 rounded-full border border-border/70 bg-card/88 px-2 py-2 shadow-[0_18px_60px_-42px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-            <div className="hidden items-center gap-1 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-[10px] font-medium tracking-[0.2em] uppercase text-muted-foreground md:flex">
-              <Move className="size-3.5" />
-              Drag canvas
-            </div>
             <Button
               className="size-8 rounded-full"
               onClick={() => zoomBy(0.9)}
@@ -420,15 +416,6 @@ export function DiagramCanvas({
             >
               <Expand className="mr-1 size-3.5" />
               Fit
-            </Button>
-            <Button
-              className="h-8 rounded-full px-3 text-[10px] tracking-[0.2em] uppercase"
-              onClick={resetTransform}
-              type="button"
-              variant="outline"
-            >
-              <RotateCcw className="mr-1 size-3.5" />
-              Reset
             </Button>
           </div>
         </div>

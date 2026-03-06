@@ -7,8 +7,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans:
+    "Inter Variable",
+    "SF Pro Display",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable",
+    "SFMono-Regular",
+    ui-monospace,
+    monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -116,11 +125,16 @@
 
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
     background-image:
       radial-gradient(circle at top left, rgba(0, 0, 0, 0.05), transparent 24%),
       linear-gradient(135deg, rgba(0, 0, 0, 0.02), transparent 55%),
       linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 45%);
     text-rendering: optimizeLegibility;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 
   .dark body {

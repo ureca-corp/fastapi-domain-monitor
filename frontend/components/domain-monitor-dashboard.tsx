@@ -677,18 +677,6 @@ export function DomainMonitorDashboard() {
               />
             </div>
           </div>
-
-          <Button
-            className="h-11 rounded-2xl"
-            disabled={refreshing}
-            onClick={() => {
-              void handleRefresh()
-            }}
-            type="button"
-          >
-            <RefreshCw className={cn("mr-2 size-4", refreshing && "animate-spin")} />
-            Refresh diagram
-          </Button>
         </div>
       </div>
     </Sidebar>

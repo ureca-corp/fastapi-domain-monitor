@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Frontend Workspace
 
-## Getting Started
+This dashboard frontend is built with Vite, React, Tailwind CSS v4, and shadcn/ui.
 
-First, run the development server:
+### Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The Vite dev server runs with HMR on [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+By default, API and WebSocket requests target `/domain-monitor` during development. If you are running the FastAPI app somewhere else, set one of these environment variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `VITE_MONITOR_BACKEND_ORIGIN=http://127.0.0.1:8000`
+  - Proxies `/domain-monitor/api` and `/domain-monitor/ws` through the Vite dev server.
+- `VITE_MONITOR_BASE_URL=http://127.0.0.1:8000/domain-monitor`
+  - Bypasses the proxy and talks to the backend directly.
 
-## Learn More
+### Build
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+bun run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This produces a plain static bundle in `frontend/dist`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Sync Into The Python Package
 
-## Deploy on Vercel
+```bash
+bun run build:monitor
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This copies the Vite output into `src/fastapi_domain_monitor/static/dashboard`, which is what the FastAPI plugin serves in packaged builds.

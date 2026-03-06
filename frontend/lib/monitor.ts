@@ -73,16 +73,21 @@ export type MonitorSocketMessage = {
 }
 
 export function getMonitorBaseUrl() {
-  const configuredBase = process.env.NEXT_PUBLIC_MONITOR_BASE_URL?.trim()
+  const configuredBase = import.meta.env.VITE_MONITOR_BASE_URL?.trim()
   if (configuredBase) {
     return configuredBase.replace(/\/$/, "")
   }
 
   if (typeof window === "undefined") {
-    return ""
+    return import.meta.env.DEV ? "/domain-monitor" : ""
   }
 
-  return window.location.pathname.replace(/\/$/, "")
+  const derivedBase = window.location.pathname.replace(/\/$/, "")
+  if (derivedBase) {
+    return derivedBase
+  }
+
+  return import.meta.env.DEV ? "/domain-monitor" : ""
 }
 
 export function buildMonitorUrl(baseUrl: string, relativePath: string) {
