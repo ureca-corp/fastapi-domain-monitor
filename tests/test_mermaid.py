@@ -102,8 +102,8 @@ def test_compact_render_includes_methods_and_stereotypes():
 
     assert 'class node_account1["Account"] {' in result
     assert "<<Entity>>" in result
-    assert "+str email = 'demo@example.com'" in result
-    assert "+str slug = build_slug()" in result
+    assert "+str email" in result
+    assert "+str slug" in result
     assert "+login() bool" in result
     assert "_secret" not in result
     assert "ClassVar" not in result

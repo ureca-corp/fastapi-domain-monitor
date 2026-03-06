@@ -205,8 +205,7 @@ def _format_field(field: ParsedField) -> str:
     type_label = "JSON" if field.is_json else field.type_annotation
     nullable = "?" if field.is_nullable else ""
     classifier = "$" if field.is_classvar else ""
-    default_suffix = _format_field_default(field)
-    return f"{prefix}{type_label}{nullable} {field.name}{classifier}{default_suffix}"
+    return f"{prefix}{type_label}{nullable} {field.name}{classifier}"
 
 
 def _format_field_default(field: ParsedField) -> str:
