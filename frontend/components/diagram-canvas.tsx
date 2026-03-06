@@ -28,6 +28,19 @@ type TransformState = {
   scale: number
 }
 
+type MermaidPalette = {
+  border: string
+  borderSoft: string
+  canvas: string
+  line: string
+  note: string
+  shadow: string
+  surface: string
+  surfaceMuted: string
+  text: string
+  textMuted: string
+}
+
 const INITIAL_TRANSFORM: TransformState = {
   hasUserViewportOverride: false,
   panX: 0,
@@ -37,6 +50,300 @@ const INITIAL_TRANSFORM: TransformState = {
 
 const MERMAID_MAX_TEXT_SIZE = 200_000
 const MERMAID_MAX_EDGES = 2_000
+const MERMAID_FONT_STACK =
+  '"Inter Variable", "SF Pro Display", ui-sans-serif, system-ui, sans-serif'
+const MERMAID_MONO_STACK =
+  '"JetBrains Mono Variable", "SFMono-Regular", ui-monospace, monospace'
+const MERMAID_FIELD_VISIBILITY_PREFIXES = new Set(["+", "-", "#", "~"])
+
+type MermaidFieldParts = {
+  defaultLine: string | null
+  name: string
+  signature: string
+}
+
+function isClassDiagramSource(source: string) {
+  return source.trimStart().startsWith("classDiagram")
+}
+
+function getMermaidPalette(theme: "light" | "dark"): MermaidPalette {
+  if (theme === "dark") {
+    return {
+      border: "rgba(255, 255, 255, 0.18)",
+      borderSoft: "rgba(255, 255, 255, 0.10)",
+      canvas: "#09090b",
+      line: "rgba(228, 228, 231, 0.42)",
+      note: "#18181b",
+      shadow: "rgba(0, 0, 0, 0.40)",
+      surface: "rgba(26, 26, 34, 0.90)",
+      surfaceMuted: "rgba(20, 20, 28, 0.88)",
+      text: "#fafafa",
+      textMuted: "#a1a1aa",
+    }
+  }
+
+  return {
+    border: "rgba(15, 15, 18, 0.16)",
+    borderSoft: "rgba(15, 15, 18, 0.09)",
+    canvas: "#f8f8fa",
+    line: "rgba(25, 25, 30, 0.38)",
+    note: "#f4f4f5",
+    shadow: "rgba(0, 0, 0, 0.08)",
+    surface: "#ffffff",
+    surfaceMuted: "rgba(246, 246, 251, 0.95)",
+    text: "#18181b",
+    textMuted: "#71717a",
+  }
+}
+
+function getClassDiagramTheme(theme: "light" | "dark") {
+  const palette = getMermaidPalette(theme)
+
+  return {
+    theme: "base" as const,
+    themeCSS: `
+      svg {
+        background: transparent;
+      }
+
+      .node rect,
+      .node circle,
+      .node ellipse,
+      .node polygon,
+      .node path,
+      g.classGroup rect,
+      .edgeLabel .label rect,
+      .classLabel .box {
+        rx: 28px;
+        ry: 28px;
+      }
+
+      .node rect,
+      .node circle,
+      .node ellipse,
+      .node polygon,
+      .node path {
+        fill: ${palette.surface};
+        stroke: ${palette.border};
+        stroke-width: 1.2px;
+      }
+
+      g.classGroup {
+        filter: drop-shadow(0 2px 6px ${palette.shadow});
+      }
+
+      g.classGroup rect {
+        fill: ${palette.surfaceMuted};
+        stroke: ${palette.borderSoft};
+        stroke-width: 1px;
+      }
+
+      g.classGroup line,
+      .divider,
+      .relation {
+        stroke: ${palette.line};
+        stroke-width: 1.1px;
+      }
+
+      g.classGroup text,
+      .nodeLabel,
+      .edgeLabel,
+      .edgeLabel span,
+      .label text,
+      .edgeTerminals {
+        color: ${palette.text};
+        fill: ${palette.text};
+        font-family: ${MERMAID_MONO_STACK};
+        font-size: 11px;
+      }
+
+      .classTitleText,
+      .classTitle {
+        fill: ${palette.text};
+        color: ${palette.text};
+        font-family: ${MERMAID_FONT_STACK};
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .classLabel .box {
+        fill: ${palette.canvas};
+        stroke: none;
+        opacity: 0.94;
+      }
+
+      .classLabel .label {
+        fill: ${palette.textMuted};
+        color: ${palette.textMuted};
+        font-family: ${MERMAID_MONO_STACK};
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .edgeLabel .label rect,
+      .labelBkg {
+        fill: ${palette.canvas};
+        stroke: ${palette.borderSoft};
+        stroke-width: 1px;
+      }
+
+      .edgeLabel .label span {
+        background: ${palette.canvas};
+        border: 1px solid ${palette.borderSoft};
+        border-radius: 999px;
+        color: ${palette.text};
+        display: inline-block;
+        padding: 0.18rem 0.55rem;
+      }
+
+      .dashed-line {
+        stroke-dasharray: 5 4;
+      }
+
+      .dotted-line {
+        stroke-dasharray: 1.5 4;
+      }
+
+      #compositionStart,
+      #compositionEnd,
+      .composition,
+      #dependencyStart,
+      #dependencyEnd,
+      .dependency {
+        fill: ${palette.line} !important;
+        stroke: ${palette.line} !important;
+      }
+
+      #extensionStart,
+      #extensionEnd,
+      .extension,
+      #aggregationStart,
+      #aggregationEnd,
+      .aggregation {
+        fill: ${palette.canvas} !important;
+        stroke: ${palette.line} !important;
+      }
+
+      #lollipopStart,
+      #lollipopEnd,
+      .lollipop {
+        fill: ${palette.surface} !important;
+        stroke: ${palette.line} !important;
+      }
+    `,
+    themeVariables: {
+      background: palette.canvas,
+      classText: palette.text,
+      clusterBkg: palette.surfaceMuted,
+      clusterBorder: palette.borderSoft,
+      edgeLabelBackground: palette.canvas,
+      fontFamily: MERMAID_MONO_STACK,
+      lineColor: palette.line,
+      mainBkg: palette.surface,
+      nodeBorder: palette.border,
+      noteBkgColor: palette.note,
+      noteBorderColor: palette.borderSoft,
+      primaryBorderColor: palette.border,
+      primaryColor: palette.surface,
+      primaryTextColor: palette.text,
+      secondaryColor: palette.surfaceMuted,
+      secondaryTextColor: palette.text,
+      tertiaryColor: palette.note,
+      tertiaryTextColor: palette.text,
+      textColor: palette.text,
+    },
+  }
+}
+
+function roundSvgRects(
+  svgElement: SVGSVGElement,
+  selector: string,
+  { radius, radiusY = radius }: { radius: string; radiusY?: string }
+) {
+  for (const node of svgElement.querySelectorAll<SVGRectElement>(selector)) {
+    node.setAttribute("rx", radius)
+    node.setAttribute("ry", radiusY)
+  }
+}
+
+function parseMermaidFieldLabel(text: string): MermaidFieldParts | null {
+  const collapsed = text.replace(/\s+/g, " ").trim()
+  if (!collapsed || !MERMAID_FIELD_VISIBILITY_PREFIXES.has(collapsed.charAt(0))) {
+    return null
+  }
+
+  const match = /^([+#~-].*\s)([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*(.+))?$/.exec(collapsed)
+  if (!match) {
+    return null
+  }
+
+  const signature = match[1].trimEnd()
+  if (signature.endsWith(")")) {
+    return null
+  }
+
+  return {
+    defaultLine: match[3] ? `default ${match[3].trim()}` : null,
+    name: match[2],
+    signature,
+  }
+}
+
+function createMemberLine(label: string, documentNode: Document, className: string) {
+  const line = documentNode.createElement("span")
+  line.className = className
+  line.textContent = label
+  return line
+}
+
+function decorateClassDiagramFieldLabels(svgElement: SVGSVGElement) {
+  for (const label of svgElement.querySelectorAll<SVGGElement>(".members-group .label")) {
+    const foreignObject = label.querySelector("foreignObject")
+    const contentWrapper = foreignObject?.querySelector("div")
+    const content = contentWrapper?.querySelector("span.nodeLabel")
+
+    if (!(foreignObject instanceof SVGForeignObjectElement)) {
+      continue
+    }
+    if (!(contentWrapper instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+      continue
+    }
+
+    const field = parseMermaidFieldLabel(content.textContent ?? "")
+    if (!field) {
+      continue
+    }
+
+    content.classList.add("mermaid-member-stack")
+    content.replaceChildren(
+      createMemberLine(field.signature, document, "mermaid-member-type"),
+      createMemberLine(field.name, document, "mermaid-member-name"),
+      ...(field.defaultLine
+        ? [createMemberLine(field.defaultLine, document, "mermaid-member-default")]
+        : [])
+    )
+
+    contentWrapper.style.display = "flex"
+    contentWrapper.style.alignItems = "center"
+    contentWrapper.style.height = "100%"
+    contentWrapper.style.maxWidth = "none"
+    contentWrapper.style.textAlign = "left"
+    contentWrapper.style.whiteSpace = "normal"
+  }
+}
+
+function decorateClassDiagramSvg(svgElement: SVGSVGElement) {
+  roundSvgRects(svgElement, ".node rect, g.classGroup rect, .classLabel .box", {
+    radius: "28",
+  })
+  roundSvgRects(svgElement, ".edgeLabel .label rect", {
+    radius: "999",
+    radiusY: "999",
+  })
+  decorateClassDiagramFieldLabels(svgElement)
+}
 
 export function DiagramCanvas({
   aliasMap,
@@ -55,9 +362,21 @@ export function DiagramCanvas({
     startX: 0,
     startY: 0,
   })
+  const zoomLabelRef = useRef<HTMLDivElement>(null)
+  const zoomPercentRef = useRef(100)
   const [statusMessage, setStatusMessage] = useState<string | null>("Loading diagram…")
   const [renderError, setRenderError] = useState<string | null>(null)
-  const [zoomPercent, setZoomPercent] = useState(100)
+
+  const syncZoomLabel = useCallback((nextZoomPercent: number) => {
+    if (zoomPercentRef.current === nextZoomPercent) {
+      return
+    }
+
+    zoomPercentRef.current = nextZoomPercent
+    if (zoomLabelRef.current) {
+      zoomLabelRef.current.textContent = `${nextZoomPercent}%`
+    }
+  }, [])
 
   const applyTransform = useCallback(() => {
     const container = containerRef.current
@@ -67,8 +386,8 @@ export function DiagramCanvas({
 
     const { panX, panY, scale } = transformRef.current
     container.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`
-    setZoomPercent(Math.round(scale * 100))
-  }, [])
+    syncZoomLabel(Math.round(scale * 100))
+  }, [syncZoomLabel])
 
   const resetTransform = useCallback(() => {
     transformRef.current = { ...INITIAL_TRANSFORM }
@@ -79,8 +398,8 @@ export function DiagramCanvas({
     }
 
     container.style.transform = "none"
-    setZoomPercent(100)
-  }, [])
+    syncZoomLabel(100)
+  }, [syncZoomLabel])
 
   const getSvgIntrinsicSize = useCallback((svgElement: SVGSVGElement) => {
     const viewBox = svgElement.viewBox?.baseVal
@@ -197,6 +516,8 @@ export function DiagramCanvas({
       try {
         const mermaidModule = await import("mermaid")
         const mermaid = mermaidModule.default
+        const isClassDiagram = isClassDiagramSource(source)
+
         mermaid.initialize({
           maxEdges: MERMAID_MAX_EDGES,
           maxTextSize: MERMAID_MAX_TEXT_SIZE,
@@ -206,6 +527,7 @@ export function DiagramCanvas({
           class: {
             hideEmptyMembersBox: true,
           },
+          ...(isClassDiagram ? getClassDiagramTheme(theme) : {}),
         })
 
         renderCounterRef.current += 1
@@ -224,7 +546,12 @@ export function DiagramCanvas({
 
         clearContainer()
         const adoptedSvg = document.adoptNode(svgElement) as unknown as SVGSVGElement
-        adoptedSvg.classList.add("h-auto", "w-auto")
+        adoptedSvg.classList.add("h-auto", "w-auto", "mermaid-diagram")
+        if (isClassDiagram) {
+          decorateClassDiagramSvg(adoptedSvg)
+          adoptedSvg.classList.add("mermaid-class-diagram")
+          adoptedSvg.dataset.diagramType = "class"
+        }
 
         const container = containerRef.current
         if (!container) {
@@ -328,9 +655,14 @@ export function DiagramCanvas({
   )
 
   return (
-    <div className={cn("relative h-full min-h-[360px] overflow-hidden rounded-[28px] border bg-background/80", className)}>
+    <div
+      className={cn(
+        "mermaid-shell relative h-full min-h-[360px] overflow-hidden rounded-[28px] border bg-background/80",
+        className
+      )}
+    >
       <div
-        className="relative h-full w-full cursor-grab overflow-hidden active:cursor-grabbing"
+        className="mermaid-wrapper relative h-full w-full cursor-grab overflow-hidden active:cursor-grabbing"
         onDoubleClick={fitDiagramToViewport}
         onMouseDown={(event) => {
           if (event.button !== 0) {
@@ -395,8 +727,11 @@ export function DiagramCanvas({
             >
               <Minus className="size-3.5" />
             </Button>
-            <div className="min-w-14 text-center font-mono text-xs tracking-[0.16em] uppercase text-foreground">
-              {zoomPercent}%
+            <div
+              className="min-w-14 text-center font-mono text-xs tracking-[0.16em] uppercase text-foreground"
+              ref={zoomLabelRef}
+            >
+              100%
             </div>
             <Button
               className="size-8 rounded-full"

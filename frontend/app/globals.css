@@ -120,21 +120,25 @@
   }
 
   html {
+    height: 100%;
+    margin: 0;
     scroll-behavior: smooth;
   }
 
   body {
     @apply bg-background text-foreground;
+    margin: 0;
     min-height: 100vh;
     background-image:
       radial-gradient(circle at top left, rgba(0, 0, 0, 0.05), transparent 24%),
       linear-gradient(135deg, rgba(0, 0, 0, 0.02), transparent 55%),
       linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 45%);
+    overflow-x: hidden;
     text-rendering: optimizeLegibility;
   }
 
   #root {
-    min-height: 100vh;
+    min-height: 100%;
   }
 
   .dark body {
@@ -150,13 +154,80 @@
   }
 }
 
+.mermaid-shell {
+  --mermaid-selection-fill: color-mix(in oklab, var(--foreground) 9%, transparent);
+  --mermaid-selection-shadow: 0 24px 72px rgba(0, 0, 0, 0.12);
+  --mermaid-tooltip-bg: color-mix(in oklab, var(--card) 96%, white 4%);
+}
+
+.dark .mermaid-shell {
+  --mermaid-selection-fill: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --mermaid-selection-shadow: 0 30px 84px rgba(0, 0, 0, 0.46);
+  --mermaid-tooltip-bg: color-mix(in oklab, var(--card) 92%, black 8%);
+}
+
 .mermaid-wrapper {
   cursor: grab;
+  user-select: none;
+  background-image:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--foreground) 5%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, transparent 100%);
 }
 
 .mermaid-wrapper svg {
   max-width: none !important;
   max-height: none !important;
+  overflow: visible;
+}
+
+.mermaid-class-diagram {
+  overflow: visible;
+}
+
+.mermaid-class-diagram .edgeLabel .label span {
+  box-shadow: none;
+}
+
+.mermaid-class-diagram .members-group .mermaid-member-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  gap: 0;
+  line-height: 1;
+}
+
+.mermaid-class-diagram .members-group .mermaid-member-stack p {
+  margin: 0;
+}
+
+.mermaid-class-diagram .members-group .mermaid-member-type {
+  color: color-mix(in oklab, var(--foreground) 58%, transparent);
+  display: block;
+  font-size: 6.8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.mermaid-class-diagram .members-group .mermaid-member-name {
+  color: var(--foreground);
+  display: block;
+  font-size: 8.4px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  padding-left: 4px;
+}
+
+.mermaid-class-diagram .members-group .mermaid-member-default {
+  color: color-mix(in oklab, var(--foreground) 48%, transparent);
+  display: block;
+  font-size: 6.8px;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  padding-left: 8px;
 }
 
 .mermaid-highlight {
@@ -165,14 +236,41 @@
 }
 
 .mermaid-selected rect,
+.mermaid-selected circle,
+.mermaid-selected ellipse,
 .mermaid-selected path,
 .mermaid-selected polygon,
 .selected-node rect,
+.selected-node circle,
+.selected-node ellipse,
 .selected-node path,
 .selected-node polygon {
   stroke: var(--foreground) !important;
-  stroke-width: 2px !important;
-  fill: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
+  stroke-width: 2.2px !important;
+  fill: var(--mermaid-selection-fill) !important;
+}
+
+.mermaidTooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--mermaid-tooltip-bg);
+  box-shadow: 0 24px 64px -36px rgba(0, 0, 0, 0.45);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  max-width: min(28rem, calc(100vw - 2rem));
+  pointer-events: none;
+  padding: 0.55rem 0.7rem;
+  text-transform: uppercase;
+  white-space: normal;
+  backdrop-filter: blur(18px);
 }
 
 ::view-transition-old(root),
