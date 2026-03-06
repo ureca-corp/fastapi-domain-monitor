@@ -1,4 +1,6 @@
 class FastapiDomainMonitor < Formula
+  include Language::Python::Virtualenv
+
   desc "Real-time SQLModel domain diagram dashboard for FastAPI projects"
   homepage "https://github.com/ureca-corp/fastapi-domain-monitor"
   url "https://github.com/ureca-corp/fastapi-domain-monitor/archive/refs/tags/v0.1.0.tar.gz"
@@ -12,11 +14,6 @@ class FastapiDomainMonitor < Formula
     venv = virtualenv_create(libexec, python3)
     venv.pip_install(buildpath)
     bin.install_symlink libexec/"bin/domain-monitor"
-  end
-
-  def post_install
-    ohai "domain-monitor installed successfully!"
-    ohai "Usage: cd your-project && domain-monitor start"
   end
 
   test do
