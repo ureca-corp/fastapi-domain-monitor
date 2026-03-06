@@ -28,16 +28,54 @@ def generate_mermaid(schema: DomainSchema, show_base_fields: bool = False) -> st
     for enum in schema.all_enums():
         _render_enum(enum, lines)
 
-    # 3. 관계선
-    seen: set[frozenset[str]] = set()
+    # 3. tablename → class_name 역방향 매핑 (FK 추론용)
+    tablename_to_class: dict[str, str] = {
+        cls.tablename: cls.name
+        for cls in schema.all_classes()
+        if cls.tablename
+    }
+
+    # 4. Enum 이름 set (Enum 연결선 추론용)
+    enum_names: set[str] = {e.name for e in schema.all_enums()}
+
+    # 5. 관계선 생성
+    seen: set[frozenset[str]] = set()          # 양방향 중복 제거 (Relationship/FK)
+    seen_enum: set[tuple[str, str]] = set()    # (source, enum) 쌍 중복 제거
+
     for module in schema.modules:
         for cls in module.classes:
+            # 5a. 명시적 Relationship() 관계선
             for rel in cls.relationships:
                 pair = frozenset({cls.name, rel.target_class})
                 if pair in seen:
                     continue
                 seen.add(pair)
                 lines.append(_render_relationship(cls.name, rel))
+
+            # 5b. FK 필드 → 관계선 자동 추론
+            for f in cls.fields:
+                if not f.foreign_key:
+                    continue
+                table_name = f.foreign_key.split(".")[0]
+                target_class = tablename_to_class.get(table_name)
+                if not target_class:
+                    continue
+                pair = frozenset({cls.name, target_class})
+                if pair in seen:
+                    continue
+                seen.add(pair)
+                lines.append(f'{cls.name} "1" --> "1" {target_class} : {f.name}')
+
+            # 5c. Enum 타입 필드 → 점선 관계선
+            for f in cls.fields:
+                type_clean = _clean_type(f.type_annotation)
+                if type_clean not in enum_names:
+                    continue
+                key = (cls.name, type_clean)
+                if key in seen_enum:
+                    continue
+                seen_enum.add(key)
+                lines.append(f'{cls.name} ..> {type_clean} : {f.name}')
 
     return "\n".join(lines) + "\n"
 

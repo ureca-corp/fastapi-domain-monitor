@@ -282,6 +282,7 @@ function showError(container, title, detail) {
 let currentMermaidSource = '';
 let domains = [];
 let hiddenDomains = new Set();
+let domainClassMap = {};  // domain_name → [class_name, ...]
 let ws = null;
 let retryDelay = 1000;
 const MAX_RETRY_DELAY = 30000;
@@ -344,6 +345,8 @@ async function renderMermaid(code) {
 
 function filterMermaidSource(code) {
   if (hiddenDomains.size === 0) return code;
+
+  // Step 1: namespace 블록 제거
   const lines = code.split('\n');
   const result = [];
   let skipDepth = 0;
@@ -352,7 +355,7 @@ function filterMermaidSource(code) {
     const nsMatch = line.match(/^\s*namespace\s+(\S+)/);
     if (nsMatch && hiddenDomains.has(nsMatch[1])) {
       skipping = true;
-      skipDepth = 0;
+      skipDepth = 1;  // namespace 자체의 { 포함
       continue;
     }
     if (skipping) {
@@ -365,7 +368,22 @@ function filterMermaidSource(code) {
     }
     result.push(line);
   }
-  return result.join('\n');
+
+  // Step 2: 숨겨진 도메인의 클래스가 포함된 관계선 제거
+  const hiddenClasses = new Set();
+  hiddenDomains.forEach(domain => {
+    (domainClassMap[domain] || []).forEach(cls => hiddenClasses.add(cls));
+  });
+
+  if (hiddenClasses.size === 0) return result.join('\n');
+
+  return result.filter(line => {
+    if (!line.includes('-->') && !line.includes('..>')) return true;
+    for (const cls of hiddenClasses) {
+      if (new RegExp(`\\b${cls}\\b`).test(line)) return false;
+    }
+    return true;
+  }).join('\n');
 }
 
 // --- Pan / Zoom ---
@@ -449,8 +467,14 @@ async function loadDomains() {
     const res = await fetch('api/schema');
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
-    // DomainSchema: { modules: [{domain_name, ...}, ...], generated_at }
+    // DomainSchema: { modules: [{domain_name, classes: [{name,...}], ...}, ...] }
     domains = (data.modules || []).map(m => m.domain_name).filter(Boolean);
+    domainClassMap = {};
+    (data.modules || []).forEach(m => {
+      if (m.domain_name) {
+        domainClassMap[m.domain_name] = (m.classes || []).map(c => c.name);
+      }
+    });
     renderDomainList();
   } catch {
     showMessage(domainListEl, 'Failed to load domains');

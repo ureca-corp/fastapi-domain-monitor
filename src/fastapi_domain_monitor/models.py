@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -70,7 +70,7 @@ class ParsedModule:
 class DomainSchema:
     """전체 파싱 결과 (여러 모듈 합산)."""
     modules: list[ParsedModule] = field(default_factory=list)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def all_classes(self) -> list[ParsedClass]:
         return [cls for m in self.modules for cls in m.classes]

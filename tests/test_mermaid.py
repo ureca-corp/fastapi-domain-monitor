@@ -178,3 +178,72 @@ def test_nullable_field_has_question_mark():
     result = generate_mermaid(schema)
 
     assert "+str? contact" in result
+
+
+def test_fk_inferred_relationship():
+    """FK만 있고 Relationship() 없는 경우 → 관계선 자동 생성."""
+    from fastapi_domain_monitor.models import ParsedClass
+
+    student = _entity("Student", fields=[
+        ParsedField(name="account_id", type_annotation="UUID", foreign_key="accounts.id"),
+    ])
+    account = ParsedClass(
+        name="Account",
+        base_classes=["BaseModel", "SQLModel"],
+        is_table=True,
+        tablename="accounts",
+        fields=[ParsedField(name="login_id", type_annotation="str")],
+        relationships=[],
+    )
+    schema = DomainSchema(modules=[
+        _module("students", classes=[student]),
+        _module("accounts", classes=[account]),
+    ])
+    result = generate_mermaid(schema)
+
+    rel_lines = [l for l in result.split("\n") if "-->" in l]
+    assert len(rel_lines) == 1
+    assert "Student" in rel_lines[0]
+    assert "Account" in rel_lines[0]
+    assert "account_id" in rel_lines[0]
+
+
+def test_enum_relationship():
+    """필드 타입이 Enum이면 점선 연결선(..>) 생성."""
+    enum = ParsedEnum(name="ActiveStatus", base_class="StrEnum", members=["ACTIVE", "INACTIVE"])
+    cls = _entity("Account", fields=[
+        ParsedField(name="status", type_annotation="ActiveStatus"),
+    ])
+    schema = DomainSchema(modules=[_module("accounts", classes=[cls], enums=[enum])])
+    result = generate_mermaid(schema)
+
+    assert "..>" in result
+    assert "ActiveStatus" in result
+    assert ": status" in result
+
+
+def test_fk_no_duplicate_with_explicit():
+    """Relationship()과 FK가 동시에 있으면 관계선 1개만 생성."""
+    from fastapi_domain_monitor.models import ParsedClass
+
+    rel = ParsedRelationship(field_name="account", target_class="Account", is_list=False)
+    student = _entity("Student",
+        fields=[ParsedField(name="account_id", type_annotation="UUID", foreign_key="accounts.id")],
+        relationships=[rel],
+    )
+    account = ParsedClass(
+        name="Account",
+        base_classes=["BaseModel", "SQLModel"],
+        is_table=True,
+        tablename="accounts",
+        fields=[],
+        relationships=[],
+    )
+    schema = DomainSchema(modules=[
+        _module("students", classes=[student]),
+        _module("accounts", classes=[account]),
+    ])
+    result = generate_mermaid(schema)
+
+    rel_lines = [l for l in result.split("\n") if "-->" in l]
+    assert len(rel_lines) == 1
