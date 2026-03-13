@@ -182,7 +182,9 @@ def _render_class(
     for stereotype in parsed_class.stereotypes:
         lines.append(f"        <<{stereotype}>>")
 
-    for field in _visible_fields(parsed_class.fields, show_base_fields):
+    # Abstract 클래스(Mixin 등)는 BASE_FIELDS가 핵심 내용이므로 항상 표시
+    is_abstract = "Abstract" in parsed_class.stereotypes
+    for field in _visible_fields(parsed_class.fields, show_base_fields or is_abstract):
         lines.append(f"        {_format_field(field)}")
 
     for method in _visible_methods(parsed_class.methods):
