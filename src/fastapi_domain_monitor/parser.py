@@ -912,7 +912,7 @@ def parse_directory(
             if base_set is not None:
                 module.classes = [
                     cls for cls in module.classes
-                    if any(base in base_set for base in cls.base_classes)
+                    if cls.is_table or any(base in base_set for base in cls.base_classes)
                 ]
                 if not module.classes:
                     continue
