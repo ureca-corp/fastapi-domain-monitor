@@ -643,6 +643,8 @@ def _compute_stereotypes(parsed_class: ParsedClass) -> list[str]:
         stereotypes.append("Entity")
     elif any(base == "BaseModel" for base in parsed_class.base_classes) or any(hint in parsed_class.name.lower() for hint in DTO_NAME_HINTS):
         stereotypes.append("DTO")
+    elif any(base in FRAMEWORK_BASES for base in parsed_class.base_classes):
+        stereotypes.append("Abstract")
     else:
         stereotypes.append("ValueObject")
 
@@ -856,6 +858,80 @@ def _iter_model_files(directory: Path, watch_patterns: tuple[str, ...]) -> list[
 # ── 공개 API ─────────────────────────────────────────────────
 
 
+def _infer_enum_hints_from_source_comments(
+    module: ParsedModule, source_lines: tuple[str, ...], class_nodes: list[ast.ClassDef]
+) -> None:
+    """필드 주석의 콤마 구분 값 목록을 Enum 멤버값과 비교해 enum_ref_hint 자동 추론.
+
+    예) status: str = Field(...)  # pending, confirmed, completed
+    → 같은 모듈에 members={PENDING,CONFIRMED,...}인 Enum이 있으면 자동 연결.
+    """
+    if not module.enums:
+        return
+
+    enum_value_map: dict[str, set[str]] = {
+        enum.name: {m.lower() for m in enum.members}
+        for enum in module.enums
+        if enum.members
+    }
+    if not enum_value_map:
+        return
+
+    # 클래스 필드의 (라인번호 → ParsedField) 매핑 구성
+    field_by_line: dict[int, "ParsedField"] = {}
+    for cls in module.classes:
+        for field in cls.fields:
+            if field.enum_ref_hint is not None:
+                continue
+            if field.type_annotation not in ("str", "str | None"):
+                continue
+            if hasattr(field, "_source_line"):
+                field_by_line[field._source_line] = field
+
+    # AnnAssign 노드에서 라인번호 → 주석 값 목록 추출
+    for cls_node in class_nodes:
+        for item in ast.walk(cls_node):
+            if not isinstance(item, ast.AnnAssign):
+                continue
+            if not isinstance(item.target, ast.Name):
+                continue
+
+            # 멀티라인 Field()의 마지막 줄 주석도 수집
+            start = getattr(item, "lineno", 0)
+            end = getattr(item, "end_lineno", start)
+            comment_values: set[str] = set()
+            for lineno in range(start, end + 1):
+                if lineno < 1 or lineno > len(source_lines):
+                    continue
+                line = source_lines[lineno - 1]
+                if "#" not in line:
+                    continue
+                comment = line.split("#", 1)[1].strip()
+                # "value1, value2, ..." 형태인 경우만 처리
+                parts = [p.strip().lower() for p in comment.split(",") if p.strip()]
+                if len(parts) >= 2 and all(re.fullmatch(r"[a-z_][a-z0-9_]*", p) for p in parts):
+                    comment_values.update(parts)
+
+            if not comment_values:
+                continue
+
+            # 매칭되는 Enum 찾기
+            matched = [
+                name for name, values in enum_value_map.items()
+                if comment_values <= values  # 주석 값이 Enum 멤버의 부분집합
+            ]
+            if len(matched) != 1:
+                continue
+
+            # 해당 필드에 enum_ref_hint 설정
+            field_name = item.target.id
+            for cls in module.classes:
+                for field in cls.fields:
+                    if field.name == field_name and field.enum_ref_hint is None:
+                        if field.type_annotation in ("str", "str | None"):
+                            field.enum_ref_hint = matched[0]
+
+
 def parse_file(file_path: Path) -> ParsedModule:
     """단일 모델 파일 파싱."""
 
@@ -868,13 +944,16 @@ def parse_file(file_path: Path) -> ParsedModule:
         file_path=file_path.resolve(),
     )
 
+    class_nodes: list[ast.ClassDef] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             if _is_enum_class(node):
                 module.enums.append(_parse_enum(node, file_path))
             else:
+                class_nodes.append(node)
                 module.classes.append(_parse_class(node, file_path, source_lines))
 
+    _infer_enum_hints_from_source_comments(module, source_lines, class_nodes)
     _resolve_schema_references(DomainSchema(modules=[module]))
     return module
 
