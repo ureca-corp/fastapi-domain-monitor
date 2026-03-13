@@ -93,6 +93,7 @@ class ParsedEnum:
     source_span: SourceSpan
     base_class: str
     members: list[str] = field(default_factory=list)
+    base_classes: list[str] = field(default_factory=list)
 
 
 @dataclass

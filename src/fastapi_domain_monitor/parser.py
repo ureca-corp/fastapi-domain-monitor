@@ -674,12 +674,14 @@ def _parse_enum(cls_node: ast.ClassDef, file_path: Path) -> ParsedEnum:
                 if isinstance(target, ast.Name):
                     members.append(target.id)
 
+    all_bases = [b for base in cls_node.bases if (b := _last_name(base))]
     return ParsedEnum(
         name=cls_node.name,
         symbol_id=_make_symbol_id(file_path, cls_node.name, "enum"),
         source_span=_make_source_span(file_path, cls_node),
         base_class=base_class,
         members=members,
+        base_classes=all_bases,
     )
 
 
@@ -881,11 +883,23 @@ def parse_directory(
     watch_dirs: list[str | Path],
     base_path: Path | None = None,
     watch_patterns: list[str] | tuple[str, ...] | None = None,
+    watch_class_bases: list[str] | tuple[str, ...] | None = None,
 ) -> DomainSchema:
-    """여러 디렉터리에서 모델 파일을 찾아 파싱."""
+    """여러 디렉터리에서 모델 파일을 찾아 파싱.
+
+    watch_class_bases가 지정되면 파일명 패턴 대신 클래스 상속 기반으로 필터링합니다.
+    모든 .py 파일을 스캔하되, 지정된 base class를 상속하는 클래스가 하나라도 있는
+    파일만 포함합니다. 해당 파일의 Enum도 함께 포함됩니다.
+    """
 
     schema = DomainSchema()
-    patterns = tuple(watch_patterns or DEFAULT_WATCH_PATTERNS)
+
+    if watch_class_bases is not None:
+        base_set = set(watch_class_bases)
+        patterns = ("*.py",)
+    else:
+        base_set = None
+        patterns = tuple(watch_patterns or DEFAULT_WATCH_PATTERNS)
 
     for dir_path in watch_dirs:
         directory = Path(dir_path)
@@ -894,7 +908,15 @@ def parse_directory(
         if not directory.exists():
             continue
         for model_file in _iter_model_files(directory, patterns):
-            schema.modules.append(parse_file(model_file))
+            module = parse_file(model_file)
+            if base_set is not None:
+                module.classes = [
+                    cls for cls in module.classes
+                    if any(base in base_set for base in cls.base_classes)
+                ]
+                if not module.classes:
+                    continue
+            schema.modules.append(module)
 
     _resolve_schema_references(schema)
     return schema

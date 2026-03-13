@@ -33,11 +33,13 @@ class MonitorState:
         *,
         watch_dirs: list[Path],
         watch_patterns: tuple[str, ...],
+        watch_class_bases: tuple[str, ...] | None,
         detail_level: str,
         show_base_fields: bool,
     ) -> None:
         self.watch_dirs = watch_dirs
         self.watch_patterns = watch_patterns
+        self.watch_class_bases = watch_class_bases
         self.detail_level = detail_level
         self.show_base_fields = show_base_fields
         self.schema: DomainSchema | None = None
@@ -49,7 +51,11 @@ class MonitorState:
         """파일 재파싱 + 연결된 WebSocket 클라이언트 모두에게 push."""
 
         try:
-            schema = parse_directory(self.watch_dirs, watch_patterns=list(self.watch_patterns))
+            schema = parse_directory(
+                self.watch_dirs,
+                watch_patterns=list(self.watch_patterns),
+                watch_class_bases=list(self.watch_class_bases) if self.watch_class_bases else None,
+            )
             self.schema = schema
             self.default_mermaid_text = self.render_mermaid()
             self.last_error = None
@@ -233,9 +239,15 @@ def setup_domain_monitor(
     enabled: bool = True,
     show_base_fields: bool = True,
     watch_patterns: list[str] | tuple[str, ...] | None = None,
+    watch_class_bases: list[str] | tuple[str, ...] | None = None,
     detail_level: str = "compact",
 ) -> None:
-    """FastAPI 앱에 도메인 모니터 플러그인 마운트."""
+    """FastAPI 앱에 도메인 모니터 플러그인 마운트.
+
+    watch_class_bases가 지정되면 파일명 패턴 대신 클래스 상속 기반으로 필터링합니다.
+    모든 .py 파일을 스캔하되, 지정된 base class를 상속하는 클래스가 있는 파일만 포함합니다.
+    watch_patterns과 watch_class_bases를 동시에 지정하면 watch_class_bases가 우선합니다.
+    """
 
     if not enabled:
         return
@@ -244,9 +256,11 @@ def setup_domain_monitor(
 
     resolved_dirs = _resolve_watch_dirs(watch_dirs)
     resolved_patterns = tuple(watch_patterns or DEFAULT_WATCH_PATTERNS)
+    resolved_class_bases = tuple(watch_class_bases) if watch_class_bases else None
     state = MonitorState(
         watch_dirs=resolved_dirs,
         watch_patterns=resolved_patterns,
+        watch_class_bases=resolved_class_bases,
         detail_level=detail_level,
         show_base_fields=show_base_fields,
     )
@@ -334,7 +348,7 @@ def setup_domain_monitor(
             await state.refresh()
             watcher = ModelFileWatcher(
                 watch_dirs=resolved_dirs,
-                watch_patterns=resolved_patterns,
+                watch_patterns=("*.py",) if resolved_class_bases else resolved_patterns,
                 on_change=state.refresh,
             )
             loop = asyncio.get_running_loop()
