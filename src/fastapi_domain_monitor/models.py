@@ -118,12 +118,15 @@ class ParsedClass:
 
     @property
     def is_join_table(self) -> bool:
-        """구조적 판별: FK 2개 이상, 관계 없음, 데이터 필드 없음."""
+        """구조적 판별: FK 2개 이상, 데이터 필드 없음.
+
+        Relationship 필드는 SQLAlchemy 탐색용 헬퍼이므로 판별에서 제외.
+        """
 
         if not self.is_table:
             return False
         fk_fields = [field for field in self.fields if field.foreign_key]
-        if len(fk_fields) < 2 or self.relationships:
+        if len(fk_fields) < 2:
             return False
         non_fk_non_pk = [field for field in self.fields if not field.foreign_key and not field.is_primary_key]
         return len(non_fk_non_pk) == 0
