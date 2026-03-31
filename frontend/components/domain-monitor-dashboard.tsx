@@ -10,13 +10,11 @@ import {
 } from "react"
 import {
   AlertCircle,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   MoonStar,
   RefreshCw,
-  ServerCrash,
   SunMedium,
 } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -26,9 +24,8 @@ import { ThemeModeControl } from "@/components/theme-mode-control"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { File, Folder, Tree, type TreeViewElement } from "@/components/ui/file-tree"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -42,128 +39,26 @@ import {
   buildAvailableStereotypes,
   buildDomainSections,
   buildMonitorUrl,
-  buildMonitorWebSocketUrl,
-  ConnectionState,
   getMonitorBaseUrl,
-  MonitorFileSource,
   MonitorSchema,
-  MonitorSource,
 } from "@/lib/monitor"
 import { cn } from "@/lib/utils"
-
-const MAX_RETRY_DELAY = 30_000
-
-type DomainExplorerNode = {
-  id: string
-  kind: "directory" | "file"
-  name: string
-  path?: string
-  children?: DomainExplorerNode[]
-}
-
-function sortExplorerNodes(nodes: DomainExplorerNode[]): DomainExplorerNode[] {
-  return [...nodes]
-    .map((node) => ({
-      ...node,
-      children: node.children ? sortExplorerNodes(node.children) : undefined,
-    }))
-    .sort((left, right) => {
-      if (left.kind !== right.kind) {
-        return left.kind === "directory" ? -1 : 1
-      }
-      return left.name.localeCompare(right.name)
-    })
-}
-
-function buildDomainExplorerNodes(
-  files: Array<{ id: string; path: string | null; relativePath: string }>
-): DomainExplorerNode[] {
-  const rootNodes: DomainExplorerNode[] = []
-
-  for (const file of files) {
-    if (!file.path) {
-      continue
-    }
-
-    const segments = file.relativePath.split("/").filter(Boolean)
-    if (segments.length === 0) {
-      continue
-    }
-
-    let currentLevel = rootNodes
-    let currentKey = ""
-
-    for (const [index, segment] of segments.entries()) {
-      const isLeaf = index === segments.length - 1
-      const segmentKey = currentKey ? `${currentKey}/${segment}` : segment
-
-      if (isLeaf) {
-        currentLevel.push({
-          id: `file:${file.id}`,
-          kind: "file",
-          name: segment,
-          path: file.path,
-        })
-        continue
-      }
-
-      let nextNode = currentLevel.find(
-        (node) => node.kind === "directory" && node.name === segment
-      )
-      if (!nextNode) {
-        nextNode = {
-          id: `dir:${segmentKey}`,
-          kind: "directory",
-          name: segment,
-          children: [],
-        }
-        currentLevel.push(nextNode)
-      }
-
-      currentLevel = nextNode.children ?? []
-      nextNode.children = currentLevel
-      currentKey = segmentKey
-    }
-  }
-
-  return sortExplorerNodes(rootNodes)
-}
-
-function buildTreeElements(nodes: DomainExplorerNode[]): TreeViewElement[] {
-  return nodes.map((node) => ({
-    id: node.id,
-    name: node.name,
-    children: node.children ? buildTreeElements(node.children) : undefined,
-  }))
-}
 
 export function DomainMonitorDashboard() {
   const isMobile = useIsMobile()
   const { resolvedTheme, theme } = useTheme()
   const initializedDefaultsRef = useRef(false)
-  const retryDelayRef = useRef(1_000)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [monitorBaseUrl, setMonitorBaseUrl] = useState(() => getMonitorBaseUrl())
   const [schema, setSchema] = useState<MonitorSchema | null>(null)
   const [showBaseFields, setShowBaseFields] = useState(true)
   const [selectedDomains, setSelectedDomains] = useState<string[]>([])
   const [activeDomainName, setActiveDomainName] = useState<string | null>(null)
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
-  const [fileData, setFileData] = useState<MonitorFileSource | null>(null)
-  const [fileLoading, setFileLoading] = useState(false)
-  const [fileError, setFileError] = useState<string | null>(null)
-  const [selectedSymbolId, setSelectedSymbolId] = useState<string | null>(null)
   const [mermaidSource, setMermaidSource] = useState("classDiagram")
   const [refreshing, setRefreshing] = useState(false)
   const [initializing, setInitializing] = useState(true)
-  const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected")
   const [statusError, setStatusError] = useState<string | null>(null)
-  const [sourceData, setSourceData] = useState<MonitorSource | null>(null)
-  const [sourceLoading, setSourceLoading] = useState(false)
-  const [sourceError, setSourceError] = useState<string | null>(null)
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false)
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false)
   const [selectedStereotypes, setSelectedStereotypes] = useState<string[]>([])
 
   useEffect(() => {
@@ -173,33 +68,10 @@ export function DomainMonitorDashboard() {
   const domainSections = useMemo(() => buildDomainSections(schema), [schema])
   const availableStereotypes = useMemo(() => buildAvailableStereotypes(schema), [schema])
   const aliasMap = useMemo(() => buildAliasMap(schema), [schema])
-  const filePathToDomainMap = useMemo(() => {
-    const nextMap = new Map<string, string>()
-    for (const section of domainSections) {
-      for (const file of section.files) {
-        if (file.path) {
-          nextMap.set(file.path, section.name)
-        }
-      }
-    }
-    return nextMap
-  }, [domainSections])
   const activeDomainSection = useMemo(
     () => domainSections.find((section) => section.name === activeDomainName) ?? null,
     [activeDomainName, domainSections]
   )
-  const activeDomainExplorerNodes = useMemo(
-    () => buildDomainExplorerNodes(activeDomainSection?.files ?? []),
-    [activeDomainSection]
-  )
-  const activeDomainTreeElements = useMemo(
-    () => buildTreeElements(activeDomainExplorerNodes),
-    [activeDomainExplorerNodes]
-  )
-  const activeFileTreeId = useMemo(() => {
-    const matchingFile = activeDomainSection?.files.find((file) => file.path === activeFilePath)
-    return matchingFile ? `file:${matchingFile.id}` : undefined
-  }, [activeDomainSection, activeFilePath])
 
   const ingestSchema = useCallback((nextSchema: MonitorSchema | null) => {
     if (!nextSchema) {
@@ -275,75 +147,6 @@ export function DomainMonitorDashboard() {
     setMermaidSource(await response.text())
   }, [monitorBaseUrl, schema, selectedDomains, showBaseFields, selectedStereotypes])
 
-  const openFile = useCallback(async (filePath: string) => {
-    if (!monitorBaseUrl) {
-      return
-    }
-
-    setActiveFilePath(filePath)
-    setFileLoading(true)
-    setFileError(null)
-
-    try {
-      const params = new URLSearchParams({ file_path: filePath })
-      const response = await fetch(buildMonitorUrl(monitorBaseUrl, `api/file?${params.toString()}`), {
-        cache: "no-store",
-      })
-      if (!response.ok) {
-        throw new Error("File lookup failed")
-      }
-
-      const payload = (await response.json()) as MonitorFileSource
-      startTransition(() => {
-        setFileData(payload)
-      })
-    } catch (error) {
-      setFileError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setFileLoading(false)
-    }
-  }, [monitorBaseUrl])
-
-  async function openSource(symbolId: string) {
-    if (!monitorBaseUrl) {
-      return
-    }
-
-    setSelectedSymbolId(symbolId)
-    setSourceLoading(true)
-    setSourceError(null)
-
-    try {
-      const response = await fetch(buildMonitorUrl(monitorBaseUrl, `api/source/${symbolId}`), {
-        cache: "no-store",
-      })
-      if (!response.ok) {
-        throw new Error("Source lookup failed")
-      }
-
-      const payload = (await response.json()) as MonitorSource
-      const nextDomainName = filePathToDomainMap.get(payload.file_path)
-      startTransition(() => {
-        setSourceData(payload)
-        if (nextDomainName) {
-          setActiveDomainName(nextDomainName)
-        }
-      })
-      await openFile(payload.file_path)
-    } catch (error) {
-      setSourceError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSourceLoading(false)
-    }
-  }
-
-  const handleFileSelect = useCallback(async (filePath: string) => {
-    setSelectedSymbolId(null)
-    setSourceData(null)
-    setSourceError(null)
-    await openFile(filePath)
-  }, [openFile])
-
   useEffect(() => {
     if (!monitorBaseUrl) {
       return
@@ -411,107 +214,19 @@ export function DomainMonitorDashboard() {
     }
   }, [activeDomainName, domainSections])
 
-  useEffect(() => {
-    if (!activeDomainSection) {
-      setActiveFilePath(null)
-      setFileData(null)
-      return
-    }
-
-    const hasActiveFile = activeFilePath
-      ? activeDomainSection.files.some((file) => file.path === activeFilePath)
-      : false
-
-    if (hasActiveFile) {
-      return
-    }
-
-    const nextFilePath = activeDomainSection.files.find((file) => file.path)?.path ?? null
-    if (!nextFilePath) {
-      setActiveFilePath(null)
-      setFileData(null)
-      return
-    }
-
-    setSelectedSymbolId(null)
-    setSourceData(null)
-    setSourceError(null)
-    void openFile(nextFilePath)
-  }, [activeDomainSection, activeFilePath, openFile])
-
-  useEffect(() => {
-    if (!monitorBaseUrl) {
-      return
-    }
-
-    let disposed = false
-
-    const connect = () => {
-      if (disposed) {
-        return
-      }
-
-      const socket = new WebSocket(buildMonitorWebSocketUrl(monitorBaseUrl))
-      setConnectionState("reconnecting")
-
-      socket.onopen = () => {
-        retryDelayRef.current = 1_000
-        setConnectionState("connected")
-      }
-
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data) as {
-            defaults?: MonitorSchema["defaults"]
-            message?: string
-            schema?: MonitorSchema
-            type?: "error" | "update"
-          }
-
-          if (payload.schema) {
-            ingestSchema(payload.schema)
-          }
-
-          if (payload.type === "error") {
-            setStatusError(payload.message ?? "Monitor update failed")
-          } else {
-            setStatusError(null)
-          }
-        } catch {
-          /* ignore malformed websocket payloads */
-        }
-      }
-
-      socket.onerror = () => {
-        socket.close()
-      }
-
-      socket.onclose = () => {
-        setConnectionState("reconnecting")
-        reconnectTimerRef.current = setTimeout(connect, retryDelayRef.current)
-        retryDelayRef.current = Math.min(retryDelayRef.current * 2, MAX_RETRY_DELAY)
-      }
-
-      return socket
-    }
-
-    const socket = connect()
-
-    return () => {
-      disposed = true
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-      socket?.close()
-    }
-  }, [ingestSchema, monitorBaseUrl])
-
   async function handleRefresh() {
     setRefreshing(true)
     try {
       setStatusError(null)
-      await syncSchema()
+      const response = await fetch(buildMonitorUrl(monitorBaseUrl, "api/refresh"), {
+        method: "POST",
+        cache: "no-store",
+      })
+      if (!response.ok) {
+        throw new Error("Refresh failed")
+      }
+      const payload = (await response.json()) as MonitorSchema
+      ingestSchema(payload)
       await refreshMermaid()
     } catch (error) {
       setStatusError(error instanceof Error ? error.message : String(error))
@@ -554,42 +269,6 @@ export function DomainMonitorDashboard() {
       return current.filter((item) => item !== stereotype)
     })
   }, [])
-  const selectedSymbolMeta = sourceData && sourceData.file_path === activeFilePath ? sourceData : null
-
-  const renderExplorerNodes = useCallback((nodes: DomainExplorerNode[], depth = 0): React.ReactNode => {
-    return nodes.map((node) => {
-      if (node.kind === "directory") {
-        return (
-          <Folder
-            className="w-full rounded-lg px-2 py-1.5 text-sm hover:bg-accent/40"
-            element={<span className="truncate">{node.name}</span>}
-            key={node.id}
-            value={node.id}
-          >
-            {renderExplorerNodes(node.children ?? [], depth + 1)}
-          </Folder>
-        )
-      }
-
-      return (
-        <File
-          className={cn(
-            "w-full rounded-lg px-2 py-1.5 text-left hover:bg-accent/60",
-            depth > 0 && "pl-5"
-          )}
-          handleSelect={() => {
-            if (node.path) {
-              void handleFileSelect(node.path)
-            }
-          }}
-          key={node.id}
-          value={node.id}
-        >
-          <span className="truncate font-mono text-[11px]">{node.name}</span>
-        </File>
-      )
-    })
-  }, [handleFileSelect])
 
   const leftSidebar = (
     <Sidebar
@@ -605,7 +284,7 @@ export function DomainMonitorDashboard() {
             {selectedDomainCount} domain{selectedDomainCount === 1 ? "" : "s"} selected
           </h2>
           <p className="text-sm leading-6 text-muted-foreground">
-            Toggle visibility with checkboxes, then open any domain label to browse its files on the right.
+            Toggle visibility with checkboxes to filter the diagram.
           </p>
         </div>
 
@@ -617,7 +296,7 @@ export function DomainMonitorDashboard() {
               Domains
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Checkboxes filter the diagram. Clicking the label opens that domain in the explorer.
+              Checkboxes filter the diagram. Clicking the label selects that domain.
             </p>
           </div>
 
@@ -712,167 +391,21 @@ export function DomainMonitorDashboard() {
         <div className="space-y-4">
           <div>
             <p className="text-[11px] font-medium tracking-[0.22em] uppercase text-muted-foreground">
-              Live status
+              Show base fields
             </p>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="text-sm font-medium">
-                {connectionState === "connected"
-                  ? "Connected"
-                  : connectionState === "reconnecting"
-                    ? "Reconnecting"
-                    : "Disconnected"}
-              </p>
-              <span
-                className={cn(
-                  "size-3 rounded-full",
-                  connectionState === "connected" && "bg-emerald-500",
-                  connectionState === "reconnecting" && "bg-amber-400",
-                  connectionState === "disconnected" && "bg-rose-500"
-                )}
+            <div className="mt-2 flex items-center gap-3">
+              <Checkbox
+                checked={showBaseFields}
+                onCheckedChange={(nextChecked) => setShowBaseFields(Boolean(nextChecked))}
               />
+              <span className="text-sm text-muted-foreground">
+                Display inherited base fields
+              </span>
             </div>
           </div>
         </div>
       </div>
     </Sidebar>
-  )
-
-  const sourcePanel = (
-    <Card className="flex h-full flex-col rounded-[28px] border-border/70 bg-card/92 shadow-[0_18px_60px_-42px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-      <CardHeader className="border-b border-border/70 px-5 py-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="font-mono text-2xl tracking-[-0.04em]">
-              Domain explorer
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Pick a domain on the left, browse its real file tree here, and inspect code in the pane below.
-            </p>
-          </div>
-          {activeDomainSection ? (
-            <Badge className="rounded-full border border-border bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground" variant="outline">
-              {activeDomainSection.name}
-            </Badge>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col p-5">
-        {!activeDomainSection ? (
-          <div className="flex h-full flex-1 items-center justify-center">
-            <div className="max-w-sm rounded-[28px] border bg-background/70 px-6 py-5 text-center">
-              <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full border bg-muted">
-                <CheckCircle2 className="size-4" />
-              </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Select a domain label from the left sidebar to load its file explorer.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4">
-            <div className="overflow-hidden rounded-[24px] border bg-background/70">
-              <div className="border-b border-border/70 px-4 py-3">
-                <p className="text-[11px] font-medium tracking-[0.22em] uppercase text-muted-foreground">
-                  Explorer
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {activeDomainSection.fileCount} files · {activeDomainSection.classCount} classes · {activeDomainSection.enumCount} enums
-                </p>
-              </div>
-              <div className="h-[260px]">
-                <Tree
-                  className="h-full"
-                  disableIndent
-                  elements={activeDomainTreeElements}
-                  initialExpandedItems={[]}
-                  selectedId={activeFileTreeId}
-                >
-                  {renderExplorerNodes(activeDomainExplorerNodes)}
-                </Tree>
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border bg-background/70">
-              <div className="border-b border-border/70 px-4 py-3">
-                {selectedSymbolMeta ? (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="rounded-full bg-primary px-3 py-1 text-[11px] tracking-[0.18em] uppercase text-primary-foreground">
-                        {selectedSymbolMeta.kind}
-                      </Badge>
-                      <Badge className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground" variant="outline">
-                        lines {selectedSymbolMeta.start_line}-{selectedSymbolMeta.end_line}
-                      </Badge>
-                    </div>
-                    <div>
-                      <h3 className="font-mono text-lg tracking-[-0.04em]">{selectedSymbolMeta.name}</h3>
-                      <p className="mt-1 break-all text-xs leading-5 text-muted-foreground">
-                        {selectedSymbolMeta.file_path}
-                      </p>
-                    </div>
-                  </div>
-                ) : fileData ? (
-                  <div>
-                    <p className="text-[11px] font-medium tracking-[0.22em] uppercase text-muted-foreground">
-                      Code
-                    </p>
-                    <h3 className="mt-2 font-mono text-lg tracking-[-0.04em]">{fileData.name}</h3>
-                    <p className="mt-1 break-all text-xs leading-5 text-muted-foreground">
-                      {fileData.file_path}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-[11px] font-medium tracking-[0.22em] uppercase text-muted-foreground">
-                      Code
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Select a file to open its contents.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {fileLoading || sourceLoading ? (
-                <div className="space-y-4 p-4">
-                  <Skeleton className="h-8 rounded-2xl" />
-                  <Skeleton className="h-6 rounded-2xl" />
-                  <Skeleton className="h-[380px] rounded-[28px]" />
-                </div>
-              ) : fileError ? (
-                <div className="p-4">
-                  <Alert className="rounded-[28px] border-destructive/30 bg-background/70">
-                    <ServerCrash className="h-4 w-4" />
-                    <AlertTitle>File load failed</AlertTitle>
-                    <AlertDescription>{fileError}</AlertDescription>
-                  </Alert>
-                </div>
-              ) : sourceError ? (
-                <div className="p-4">
-                  <Alert className="rounded-[28px] border-destructive/30 bg-background/70">
-                    <ServerCrash className="h-4 w-4" />
-                    <AlertTitle>Source lookup failed</AlertTitle>
-                    <AlertDescription>{sourceError}</AlertDescription>
-                  </Alert>
-                </div>
-              ) : fileData ? (
-                <ScrollArea className="min-h-0 flex-1">
-                  <pre className="min-h-full p-5 font-mono text-[12px] leading-6 text-foreground">
-                    {fileData.content}
-                  </pre>
-                </ScrollArea>
-              ) : (
-                <div className="flex h-full flex-1 items-center justify-center px-6">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Choose a file from the tree or click a diagram node to load code here.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 
   const diagramCanvas = initializing && !schema ? (
@@ -887,10 +420,8 @@ export function DomainMonitorDashboard() {
         "h-full w-full min-h-0 border-0 bg-transparent",
         isMobile ? "rounded-[28px]" : "rounded-none"
       )}
-      onSymbolSelect={(symbolId) => {
-        void openSource(symbolId)
-      }}
-      selectedSymbolId={selectedSymbolId}
+      onSymbolSelect={() => {}}
+      selectedSymbolId={null}
       source={mermaidSource}
       theme={resolvedTheme === "dark" ? "dark" : "light"}
     />
@@ -919,10 +450,24 @@ export function DomainMonitorDashboard() {
                     Pydantic & SQLModel live diagrams
                   </h1>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Monitor schema changes in real time, pivot domains instantly, and inspect the exact source that produced each Mermaid node.
+                    Monitor schema changes, pivot domains instantly, and refresh to re-parse source files.
                   </p>
                 </div>
-                <ThemeModeControl />
+                <div className="flex items-center gap-2">
+                  <Button
+                    className="size-10 rounded-full border-border/70 shadow-sm"
+                    disabled={refreshing}
+                    onClick={() => {
+                      void handleRefresh()
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+                  </Button>
+                  <ThemeModeControl />
+                </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     {themeTone === "dark" ? <MoonStar className="size-3.5" /> : <SunMedium className="size-3.5" />}
@@ -949,7 +494,6 @@ export function DomainMonitorDashboard() {
               <div className="h-[52vh] overflow-hidden rounded-[28px] border border-border/70 bg-card/72 shadow-sm backdrop-blur-xl">
                 {diagramCanvas}
               </div>
-              <div className="min-h-[34vh]">{sourcePanel}</div>
             </div>
           </div>
         </div>
@@ -980,7 +524,7 @@ export function DomainMonitorDashboard() {
                   Pydantic & SQLModel live diagrams
                 </h1>
                 <p className="mt-0.5 truncate text-xs leading-5 text-muted-foreground xl:text-[13px]">
-                  Full-screen schema canvas with live FastAPI updates and source inspection.
+                  Full-screen schema canvas with manual refresh and domain filtering.
                 </p>
               </div>
             </div>
@@ -1067,50 +611,6 @@ export function DomainMonitorDashboard() {
                 </Button>
               </div>
               {leftSidebar}
-            </div>
-          )}
-        </div>
-        <div
-          className={cn(
-            "absolute bottom-4 right-4 z-30 transition-[width] duration-300 ease-out",
-            desktopPanelTopOffset,
-            isRightPanelCollapsed ? "w-14" : "w-[360px]"
-          )}
-        >
-          {isRightPanelCollapsed ? (
-            <Card className="flex h-full flex-col items-center justify-between rounded-[24px] border-border/70 bg-card/88 py-4 shadow-[0_18px_60px_-42px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-              <Button
-                aria-label="Expand right panel"
-                className="size-9 rounded-full"
-                onClick={() => setIsRightPanelCollapsed(false)}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-medium tracking-[0.28em] uppercase text-muted-foreground">
-                Source
-              </div>
-              <Badge className="rounded-full border border-border bg-background/80 px-2 py-1 text-[10px]" variant="outline">
-                {selectedSymbolId ? "1" : "0"}
-              </Badge>
-            </Card>
-          ) : (
-            <div className="relative h-full">
-              <div className="absolute left-0 top-4 z-10 -translate-x-1/2">
-                <Button
-                  aria-label="Collapse right panel"
-                  className="size-9 rounded-full shadow-sm"
-                  onClick={() => setIsRightPanelCollapsed(true)}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                >
-                  <ChevronRight className="size-4" />
-                </Button>
-              </div>
-              {sourcePanel}
             </div>
           )}
         </div>

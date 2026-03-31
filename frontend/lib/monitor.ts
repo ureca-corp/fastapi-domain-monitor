@@ -1,5 +1,4 @@
 export type MonitorDetailLevel = "compact"
-export type ConnectionState = "connected" | "disconnected" | "reconnecting"
 
 export type MonitorDefaults = {
   detail_level?: MonitorDetailLevel
@@ -51,30 +50,6 @@ export type MonitorSchema = {
   defaults?: MonitorDefaults
 }
 
-export type MonitorSource = {
-  symbol_id: string
-  name: string
-  kind: "class" | "enum"
-  file_path: string
-  start_line: number
-  end_line: number
-  excerpt: string
-}
-
-export type MonitorFileSource = {
-  file_path: string
-  name: string
-  content: string
-  line_count: number
-}
-
-export type MonitorSocketMessage = {
-  type: "update" | "error"
-  message?: string
-  schema?: MonitorSchema
-  defaults?: MonitorDefaults
-  mermaid?: string
-}
 
 export function getMonitorBaseUrl() {
   const configuredBase = import.meta.env.VITE_MONITOR_BASE_URL?.trim()
@@ -104,18 +79,6 @@ export function buildMonitorUrl(baseUrl: string, relativePath: string) {
 
   const normalizedBase = baseUrl.replace(/\/$/, "")
   return `${normalizedBase}/${cleanPath}`
-}
-
-export function buildMonitorWebSocketUrl(baseUrl: string) {
-  if (/^https?:\/\//.test(baseUrl)) {
-    const target = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`)
-    target.protocol = target.protocol === "https:" ? "wss:" : "ws:"
-    target.pathname = `${target.pathname.replace(/\/$/, "")}/ws`
-    return target.toString()
-  }
-
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-  return `${wsProtocol}//${window.location.host}${baseUrl.replace(/\/$/, "")}/ws`
 }
 
 export function summarizeSchema(schema: MonitorSchema | null) {
