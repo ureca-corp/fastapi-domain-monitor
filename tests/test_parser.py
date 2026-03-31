@@ -312,3 +312,57 @@ class User(SQLModel, table=True):
     assert identifier.has_default is True
     assert identifier.default_repr == "None"
     assert manager_id.is_nullable is True
+
+
+def test_transitive_base_class_resolves_stereotype(tmp_path):
+    """중간 베이스를 거치는 클래스도 올바른 stereotype을 받아야 한다.
+
+    이름 힌트(dto, schema 등)에 의존하지 않고 순수 상속 체인만으로 검증.
+    """
+    models_dir = tmp_path / "accounts"
+    models_dir.mkdir()
+
+    (models_dir / "models.py").write_text(
+        """
+from pydantic import BaseModel
+from sqlmodel import SQLModel, Field
+
+
+class BaseEntity(SQLModel):
+    pass
+
+
+class BaseInput(BaseModel):
+    pass
+
+
+class User(BaseEntity, table=True):
+    __tablename__ = "users"
+    id: int = Field(primary_key=True)
+    name: str
+
+
+class CreateUserInput(BaseInput):
+    name: str
+
+
+class DetailedUserInput(CreateUserInput):
+    email: str
+
+
+class Address:
+    city: str
+""",
+        encoding="utf-8",
+    )
+
+    schema = parse_directory([tmp_path], watch_patterns=["models.py"])
+
+    classes = {c.name: c for c in schema.all_classes()}
+
+    assert "Entity" in classes["User"].stereotypes
+    assert "Abstract" in classes["BaseEntity"].stereotypes
+    assert "DTO" in classes["BaseInput"].stereotypes       # direct BaseModel child
+    assert "DTO" in classes["CreateUserInput"].stereotypes  # transitive: → BaseInput → BaseModel
+    assert "DTO" in classes["DetailedUserInput"].stereotypes  # transitive: → CreateUserInput → BaseInput → BaseModel
+    assert "ValueObject" in classes["Address"].stereotypes

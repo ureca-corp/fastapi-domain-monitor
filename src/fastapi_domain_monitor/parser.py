@@ -635,15 +635,41 @@ def _parse_inner_config(node: ast.ClassDef) -> dict[str, str]:
     return config
 
 
-def _compute_stereotypes(parsed_class: ParsedClass) -> list[str]:
+def _collect_all_ancestors(
+    class_name: str,
+    class_name_map: dict[str, list[ParsedClass]],
+    visited: set[str] | None = None,
+) -> set[str]:
+    """클래스 이름에서 시작해 전체 조상 이름을 재귀 수집."""
+    if visited is None:
+        visited = set()
+    if class_name in visited:
+        return set()
+    visited.add(class_name)
+
+    ancestors: set[str] = set()
+    for parsed_class in class_name_map.get(class_name, []):
+        for base in parsed_class.base_classes:
+            ancestors.add(base)
+            ancestors.update(_collect_all_ancestors(base, class_name_map, visited))
+    return ancestors
+
+
+def _compute_stereotypes(parsed_class: ParsedClass, all_ancestors: set[str] | None = None) -> list[str]:
+    """클래스의 stereotype을 결정.
+
+    all_ancestors가 주어지면 transitive 상속 체인 전체를 고려.
+    """
     stereotypes: list[str] = []
+    bases_to_check = (all_ancestors | set(parsed_class.base_classes)) if all_ancestors else set(parsed_class.base_classes)
+
     if parsed_class.is_join_table:
         stereotypes.append("JoinTable")
     elif parsed_class.is_table:
         stereotypes.append("Entity")
-    elif any(base == "BaseModel" for base in parsed_class.base_classes) or any(hint in parsed_class.name.lower() for hint in DTO_NAME_HINTS):
+    elif "BaseModel" in bases_to_check or any(hint in parsed_class.name.lower() for hint in DTO_NAME_HINTS):
         stereotypes.append("DTO")
-    elif any(base in FRAMEWORK_BASES for base in parsed_class.base_classes):
+    elif any(base in FRAMEWORK_BASES for base in bases_to_check):
         stereotypes.append("Abstract")
     else:
         stereotypes.append("ValueObject")
@@ -958,6 +984,22 @@ def parse_file(file_path: Path) -> ParsedModule:
     return module
 
 
+def _build_class_name_map(schema: DomainSchema) -> dict[str, list[ParsedClass]]:
+    """전체 스키마에서 클래스 이름 → ParsedClass 리스트 맵 구축."""
+    name_map: dict[str, list[ParsedClass]] = {}
+    for cls in schema.all_classes():
+        name_map.setdefault(cls.name, []).append(cls)
+    return name_map
+
+
+def _recompute_stereotypes_with_ancestors(schema: DomainSchema) -> None:
+    """전체 스키마의 상속 체인을 해석하고 stereotype을 재계산."""
+    class_name_map = _build_class_name_map(schema)
+    for cls in schema.all_classes():
+        all_ancestors = _collect_all_ancestors(cls.name, class_name_map)
+        cls.stereotypes = _compute_stereotypes(cls, all_ancestors)
+
+
 def parse_directory(
     watch_dirs: list[str | Path],
     base_path: Path | None = None,
@@ -969,6 +1011,7 @@ def parse_directory(
     watch_class_bases가 지정되면 파일명 패턴 대신 클래스 상속 기반으로 필터링합니다.
     모든 .py 파일을 스캔하되, 지정된 base class를 상속하는 클래스가 하나라도 있는
     파일만 포함합니다. 해당 파일의 Enum도 함께 포함됩니다.
+    Transitive 상속 체인을 해석하여 정확한 stereotype 분류와 필터링을 수행합니다.
     """
 
     schema = DomainSchema()
@@ -980,6 +1023,7 @@ def parse_directory(
         base_set = None
         patterns = tuple(watch_patterns or DEFAULT_WATCH_PATTERNS)
 
+    # Phase 1: 모든 파일 파싱 (필터링 전)
     for dir_path in watch_dirs:
         directory = Path(dir_path)
         if base_path and not directory.is_absolute():
@@ -988,14 +1032,24 @@ def parse_directory(
             continue
         for model_file in _iter_model_files(directory, patterns):
             module = parse_file(model_file)
-            if base_set is not None:
-                module.classes = [
-                    cls for cls in module.classes
-                    if cls.is_table or any(base in base_set for base in cls.base_classes)
-                ]
-                if not module.classes:
-                    continue
             schema.modules.append(module)
 
+    # Phase 2: Transitive 상속 해석 + stereotype 재계산
+    _recompute_stereotypes_with_ancestors(schema)
+
+    # Phase 3: watch_class_bases 필터 (transitive 조상 기준)
+    if base_set is not None:
+        class_name_map = _build_class_name_map(schema)
+        for module in schema.modules:
+            module.classes = [
+                cls for cls in module.classes
+                if cls.is_table or (
+                    (_collect_all_ancestors(cls.name, class_name_map) | set(cls.base_classes))
+                    & base_set
+                )
+            ]
+        schema.modules = [m for m in schema.modules if m.classes]
+
+    # Phase 4: 교차 모듈 참조 해석
     _resolve_schema_references(schema)
     return schema
