@@ -48,7 +48,7 @@ class InvoiceDTO:
     )
 
 
-def test_schema_mermaid_and_source_endpoints(tmp_path):
+def test_schema_and_mermaid_endpoints(tmp_path):
     _write_fixture(tmp_path)
     app = FastAPI()
     setup_domain_monitor(
@@ -72,14 +72,6 @@ def test_schema_mermaid_and_source_endpoints(tmp_path):
         assert schema["defaults"]["detail_level"] == "compact"
         assert {module["domain_name"] for module in schema["modules"]} == {"accounts", "billing"}
 
-        account_symbol = next(
-            item["symbol_id"]
-            for module in schema["modules"]
-            if module["domain_name"] == "accounts"
-            for item in module["classes"]
-            if item["name"] == "AccountSchema"
-        )
-
         compact_mermaid = client.get(
             "/domain-monitor/api/mermaid",
             params={"domains": "accounts", "detail_level": "compact", "show_base_fields": "false"},
@@ -95,20 +87,42 @@ def test_schema_mermaid_and_source_endpoints(tmp_path):
         assert unsupported_mermaid.status_code == 400
         assert unsupported_mermaid.json()["detail"] == "Unsupported detail level"
 
-        source_response = client.get(f"/domain-monitor/api/source/{account_symbol}")
-        assert source_response.status_code == 200
-        source = source_response.json()
-        assert source["name"] == "AccountSchema"
-        assert "class AccountSchema" in source["excerpt"]
 
-        file_response = client.get(
-            "/domain-monitor/api/file",
-            params={"file_path": source["file_path"]},
+def test_post_refresh_reparses_files(tmp_path):
+    accounts_dir = tmp_path / "accounts"
+    accounts_dir.mkdir()
+
+    (accounts_dir / "schemas.py").write_text(
+        "class OriginalModel:\n    id: int\n",
+        encoding="utf-8",
+    )
+
+    app = FastAPI()
+    setup_domain_monitor(app, watch_dirs=[tmp_path], watch_patterns=["schemas.py"])
+
+    with TestClient(app) as client:
+        schema = client.get("/domain-monitor/api/schema").json()
+        class_names = {c["name"] for m in schema["modules"] for c in m["classes"]}
+        assert "OriginalModel" in class_names
+
+        # 파일 변경 시뮬레이션
+        (accounts_dir / "schemas.py").write_text(
+            "class UpdatedModel:\n    id: int\n",
+            encoding="utf-8",
         )
-        assert file_response.status_code == 200
-        file_payload = file_response.json()
-        assert file_payload["name"] == "schemas.py"
-        assert "class AccountSchema" in file_payload["content"]
+
+        # refresh 전에는 캐시된 결과
+        schema_before = client.get("/domain-monitor/api/schema").json()
+        class_names_before = {c["name"] for m in schema_before["modules"] for c in m["classes"]}
+        assert "OriginalModel" in class_names_before
+
+        # POST /api/refresh 로 재파싱
+        refresh_response = client.post("/domain-monitor/api/refresh")
+        assert refresh_response.status_code == 200
+        refreshed = refresh_response.json()
+        class_names_after = {c["name"] for m in refreshed["modules"] for c in m["classes"]}
+        assert "UpdatedModel" in class_names_after
+        assert "OriginalModel" not in class_names_after
 
 
 def test_static_assets_are_served():
@@ -135,7 +149,7 @@ def test_setup_domain_monitor_rejects_full_detail_level():
         setup_domain_monitor(app, detail_level="full")
 
 
-def test_custom_mount_path_serves_html_api_and_websocket(tmp_path):
+def test_custom_mount_path_serves_html_and_api(tmp_path):
     _write_fixture(tmp_path)
     app = FastAPI()
     setup_domain_monitor(app, watch_dirs=[tmp_path], mount_path="/custom-monitor")
@@ -148,8 +162,5 @@ def test_custom_mount_path_serves_html_api_and_websocket(tmp_path):
         schema_response = client.get("/custom-monitor/api/schema")
         assert schema_response.status_code == 200
 
-        with client.websocket_connect("/custom-monitor/ws") as websocket:
-            initial = websocket.receive_json()
-
-    assert initial["type"] == "update"
-    assert "schema" in initial
+        refresh_response = client.post("/custom-monitor/api/refresh")
+        assert refresh_response.status_code == 200
