@@ -366,3 +366,47 @@ class Address:
     assert "DTO" in classes["CreateUserInput"].stereotypes  # transitive: → BaseInput → BaseModel
     assert "DTO" in classes["DetailedUserInput"].stereotypes  # transitive: → CreateUserInput → BaseInput → BaseModel
     assert "ValueObject" in classes["Address"].stereotypes
+
+
+def test_watch_class_bases_includes_transitive_descendants(tmp_path):
+    """watch_class_bases 필터가 간접 상속 클래스도 포함해야 한다."""
+    feature_dir = tmp_path / "users"
+    feature_dir.mkdir()
+
+    (feature_dir / "create_user.py").write_text(
+        """
+from pydantic import BaseModel
+from sqlmodel import SQLModel, Field
+
+
+class BaseInput(BaseModel):
+    pass
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    id: int = Field(primary_key=True)
+    name: str
+
+
+class CreateUserInput(BaseInput):
+    name: str
+
+
+class DetailedInput(CreateUserInput):
+    email: str
+""",
+        encoding="utf-8",
+    )
+
+    schema = parse_directory(
+        [tmp_path],
+        watch_class_bases=["SQLModel", "BaseModel"],
+    )
+
+    class_names = {c.name for c in schema.all_classes()}
+
+    assert "User" in class_names
+    assert "BaseInput" in class_names
+    assert "CreateUserInput" in class_names
+    assert "DetailedInput" in class_names  # transitive: → CreateUserInput → BaseInput → BaseModel
