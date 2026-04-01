@@ -10,10 +10,10 @@ bun dev
 
 The Vite dev server runs with HMR on [http://localhost:3000](http://localhost:3000).
 
-By default, API and WebSocket requests target `/domain-monitor` during development. If you are running the FastAPI app somewhere else, set one of these environment variables:
+By default, API requests target `/domain-monitor` during development. If you are running the FastAPI app somewhere else, set one of these environment variables:
 
 - `VITE_MONITOR_BACKEND_ORIGIN=http://127.0.0.1:8000`
-  - Proxies `/domain-monitor/api` and `/domain-monitor/ws` through the Vite dev server.
+  - Proxies `/domain-monitor/api` through the Vite dev server.
 - `VITE_MONITOR_BASE_URL=http://127.0.0.1:8000/domain-monitor`
   - Bypasses the proxy and talks to the backend directly.
 

@@ -531,8 +531,6 @@ const state = {
   currentMermaidSource: '',
   selectedDomains: new Set(),
   selectedSymbolId: null,
-  ws: null,
-  retryDelay: 1000,
   renderCounter: 0,
   initializedDefaults: false,
   detailLevel: 'compact',
@@ -544,7 +542,6 @@ const state = {
   hasUserViewportOverride: false,
 };
 
-const MAX_RETRY_DELAY = 30000;
 const savedTheme = localStorage.getItem('theme') || 'light';
 applyTheme(savedTheme);
 
@@ -941,43 +938,6 @@ async function openSource(symbolId) {
   }
 }
 
-function connect() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const basePath = location.pathname.replace(/\/$/, '');
-  state.ws = new WebSocket(`${protocol}//${location.host}${basePath}/ws`);
-
-  state.ws.onopen = () => {
-    state.retryDelay = 1000;
-    setStatus('connected');
-  };
-
-  state.ws.onmessage = async (event) => {
-    try {
-      const payload = JSON.parse(event.data);
-      if (payload.schema) {
-        ingestSchema(payload.schema);
-      }
-      if (payload.type === 'update') {
-        await renderCurrentView();
-      } else if (payload.type === 'error') {
-        showError(diagramContainer, 'Parse Error', payload.message || 'Unknown error');
-      }
-    } catch {
-      /* ignore malformed messages */
-    }
-  };
-
-  state.ws.onclose = () => {
-    setStatus('reconnecting');
-    setTimeout(connect, state.retryDelay);
-    state.retryDelay = Math.min(state.retryDelay * 2, MAX_RETRY_DELAY);
-  };
-
-  state.ws.onerror = () => {
-    state.ws.close();
-  };
-}
-
 refreshBtn.addEventListener('click', async () => {
   refreshBtn.disabled = true;
   try {
@@ -997,7 +957,6 @@ async function init() {
   } catch (error) {
     showError(diagramContainer, 'Failed to load initial diagram', error.message || String(error));
   }
-  connect();
 }
 
 init();

@@ -32,11 +32,6 @@ export default defineConfig(({ command, mode }) => {
               target: backendOrigin,
               changeOrigin: true,
             },
-            "/domain-monitor/ws": {
-              target: backendOrigin,
-              changeOrigin: true,
-              ws: true,
-            },
           }
         : undefined,
     },

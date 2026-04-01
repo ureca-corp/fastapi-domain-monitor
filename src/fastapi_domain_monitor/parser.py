@@ -674,7 +674,7 @@ def _compute_stereotypes(parsed_class: ParsedClass, all_ancestors: set[str] | No
     else:
         stereotypes.append("ValueObject")
 
-    if parsed_class.is_abstract:
+    if parsed_class.is_abstract and "Abstract" not in stereotypes:
         stereotypes.append("Abstract")
     return stereotypes
 
